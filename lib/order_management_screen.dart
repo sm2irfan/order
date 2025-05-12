@@ -87,7 +87,8 @@ class _OrderManagementScreenState extends State<OrderManagementScreen> {
             try {
               final int productId = detail['product_id'] as int;
               final String productName =
-                  productNameMap[productId] ?? 'Unknown Product';
+                  (productNameMap[productId]?.split(' - ').first) ??
+                  'Unknown Product';
 
               orderDetails.add(
                 OrderDetail(
