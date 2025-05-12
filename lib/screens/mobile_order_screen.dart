@@ -57,7 +57,7 @@ class MobileOrderScreen extends StatelessWidget {
                     orderStatuses.map<DropdownMenuItem<String>>((String value) {
                       return DropdownMenuItem<String>(
                         value: value,
-                        child: Text(value),
+                        child: SelectableText(value),
                       );
                     }).toList(),
               ),
@@ -69,7 +69,7 @@ class MobileOrderScreen extends StatelessWidget {
           Expanded(
             child:
                 filteredOrders.isEmpty
-                    ? const Center(child: Text('No orders found.'))
+                    ? const Center(child: SelectableText('No orders found.'))
                     : ListView.builder(
                       itemCount: filteredOrders.length,
                       itemBuilder: (context, index) {
@@ -86,7 +86,7 @@ class MobileOrderScreen extends StatelessWidget {
                                 color: Colors.white,
                               ),
                             ),
-                            title: Text(
+                            title: SelectableText(
                               'Order ID: ${order.id}',
                               style: const TextStyle(
                                 fontWeight: FontWeight.bold,
@@ -109,7 +109,7 @@ class MobileOrderScreen extends StatelessWidget {
                                         ),
                                         borderRadius: BorderRadius.circular(12),
                                       ),
-                                      child: Text(
+                                      child: SelectableText(
                                         order.orderStatus,
                                         style: const TextStyle(
                                           color: Colors.white,
@@ -120,10 +120,10 @@ class MobileOrderScreen extends StatelessWidget {
                                   ],
                                 ),
                                 const SizedBox(height: 4),
-                                Text(
+                                SelectableText(
                                   'Total: LKR ${order.totalAmount.toStringAsFixed(2)}',
                                 ),
-                                Text(
+                                SelectableText(
                                   'Date: ${order.createdAt.day}/${order.createdAt.month}/${order.createdAt.year}',
                                   style: TextStyle(
                                     fontSize: 12,

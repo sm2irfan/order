@@ -95,34 +95,98 @@ class DatabaseHelper {
     ''');
   }
 
-  // Insert a new order
+  // Insert or update a product
+  Future<int> upsertProduct(Map<String, dynamic> row) async {
+    Database db = await instance.database;
+
+    try {
+      return await db.insert(
+        'all_products',
+        row,
+        conflictAlgorithm: ConflictAlgorithm.replace,
+      );
+    } catch (e) {
+      // If insert with REPLACE fails, try an update
+      print('Error during product upsert, trying update: $e');
+      return await db.update(
+        'all_products',
+        row,
+        where: 'id = ?',
+        whereArgs: [row['id']],
+      );
+    }
+  }
+
+  // Insert or update a profile
+  Future<int> upsertProfile(Map<String, dynamic> row) async {
+    Database db = await instance.database;
+    return await db.insert(
+      'profiles',
+      row,
+      conflictAlgorithm: ConflictAlgorithm.replace,
+    );
+  }
+
+  // Insert or update an order
+  Future<int> upsertOrder(Map<String, dynamic> row) async {
+    Database db = await instance.database;
+    return await db.insert(
+      'orders',
+      row,
+      conflictAlgorithm: ConflictAlgorithm.replace,
+    );
+  }
+
+  // Insert or update an order detail
+  Future<int> upsertOrderDetail(Map<String, dynamic> row) async {
+    Database db = await instance.database;
+
+    // For order details without an ID, we need a different approach
+    // First check if it exists by using order_id and product_id
+    final existingRows = await db.query(
+      'order_details',
+      where: 'order_id = ? AND product_id = ?',
+      whereArgs: [row['order_id'], row['product_id']],
+    );
+
+    if (existingRows.isNotEmpty) {
+      // Update existing record
+      return await db.update(
+        'order_details',
+        row,
+        where: 'order_id = ? AND product_id = ?',
+        whereArgs: [row['order_id'], row['product_id']],
+      );
+    } else {
+      // Insert new record
+      return await db.insert('order_details', row);
+    }
+  }
+
+  // Original methods kept for backward compatibility
   Future<int> insertOrder(Map<String, dynamic> row) async {
-    Database db = await instance.database;
-    return await db.insert('orders', row);
+    return await upsertOrder(row);
   }
 
-  // Insert a new order detail
   Future<int> insertOrderDetail(Map<String, dynamic> row) async {
-    Database db = await instance.database;
-    return await db.insert('order_details', row);
+    return await upsertOrderDetail(row);
   }
 
-  // Insert a new product
   Future<int> insertProduct(Map<String, dynamic> row) async {
-    Database db = await instance.database;
-    return await db.insert('all_products', row);
+    return await upsertProduct(row);
   }
 
-  // Insert a new profile
   Future<int> insertProfile(Map<String, dynamic> row) async {
-    Database db = await instance.database;
-    return await db.insert('profiles', row);
+    return await upsertProfile(row);
   }
 
   // Get all orders
   Future<List<Map<String, dynamic>>> getOrders() async {
     Database db = await instance.database;
-    return await db.query('orders');
+    return await db.query(
+      'orders',
+      orderBy: 'created_at DESC', // Sort by creation date in descending order
+    );
   }
 
   // Get order details for a specific order
@@ -151,5 +215,12 @@ class DatabaseHelper {
       limit: 1,
     );
     return result.isNotEmpty ? result.first : null;
+  }
+
+  // Clear a table before syncing
+  Future<void> clearTable(String tableName) async {
+    Database db = await instance.database;
+    await db.delete(tableName);
+    print('Cleared table: $tableName');
   }
 }

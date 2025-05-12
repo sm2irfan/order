@@ -50,75 +50,92 @@ class DesktopOrderScreen extends StatelessWidget {
           ),
           child: Padding(
             padding: const EdgeInsets.all(16.0),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Text(
-                  'Filters',
-                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-                ),
-                const SizedBox(height: 16),
-                TextField(
-                  controller: searchController,
-                  decoration: const InputDecoration(
-                    labelText: 'Search by Order ID',
-                    prefixIcon: Icon(Icons.search),
-                    border: OutlineInputBorder(),
+            child: SingleChildScrollView(
+              // Add ScrollView to fix overflow
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const SelectableText(
+                    'Filters',
+                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
                   ),
-                ),
-                const SizedBox(height: 16),
-                const Text('Order Status'),
-                const SizedBox(height: 8),
-                DropdownButton<String>(
-                  isExpanded: true,
-                  value: selectedStatusFilter,
-                  items:
-                      orderStatuses.map((String value) {
-                        return DropdownMenuItem<String>(
-                          value: value,
-                          child: Text(value),
-                        );
-                      }).toList(),
-                  onChanged: (String? newValue) {
-                    // This will be handled by the parent widget
-                  },
-                ),
-                const SizedBox(height: 16),
-                const Divider(),
-                const SizedBox(height: 16),
+                  const SizedBox(height: 16),
+                  TextField(
+                    controller: searchController,
+                    decoration: const InputDecoration(
+                      labelText: 'Search by Order ID',
+                      prefixIcon: Icon(Icons.search),
+                      border: OutlineInputBorder(),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  const SelectableText('Order Status'),
+                  const SizedBox(height: 8),
+                  DropdownButton<String>(
+                    isExpanded: true,
+                    value: selectedStatusFilter,
+                    items:
+                        orderStatuses.map((String value) {
+                          return DropdownMenuItem<String>(
+                            value: value,
+                            child: SelectableText(value),
+                          );
+                        }).toList(),
+                    onChanged: (String? newValue) {
+                      // This will be handled by the parent widget
+                    },
+                  ),
+                  const SizedBox(height: 16),
+                  const Divider(),
+                  const SizedBox(height: 16),
 
-                // Summary statistics
-                const Text(
-                  'Order Statistics',
-                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-                ),
-                const SizedBox(height: 8),
-                _buildStatisticsCard(
-                  'Total Orders',
-                  allOrders.length.toString(),
-                ),
-                _buildStatisticsCard(
-                  'Delivered',
-                  allOrders
-                      .where((o) => o.orderStatus == 'Delivered')
-                      .length
-                      .toString(),
-                ),
-                _buildStatisticsCard(
-                  'In Transit',
-                  allOrders
-                      .where((o) => o.orderStatus == 'In Transit')
-                      .length
-                      .toString(),
-                ),
-                _buildStatisticsCard(
-                  'Pending',
-                  allOrders
-                      .where((o) => o.orderStatus == 'Order Placed')
-                      .length
-                      .toString(),
-                ),
-              ],
+                  // Summary statistics
+                  const SelectableText(
+                    'Order Statistics',
+                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                  ),
+                  const SizedBox(height: 8),
+                  _buildStatisticsCard(
+                    'Total Orders',
+                    allOrders.length.toString(),
+                  ),
+                  _buildStatisticsCard(
+                    'Delivered',
+                    allOrders
+                        .where((o) => o.orderStatus == 'Delivered')
+                        .length
+                        .toString(),
+                  ),
+                  _buildStatisticsCard(
+                    'Placed',
+                    allOrders
+                        .where((o) => o.orderStatus == 'Order Placed')
+                        .length
+                        .toString(),
+                  ),
+                  _buildStatisticsCard(
+                    'Processing',
+                    allOrders
+                        .where((o) => o.orderStatus == 'Order Processing')
+                        .length
+                        .toString(),
+                  ),
+                  _buildStatisticsCard(
+                    'Shipped',
+                    allOrders
+                        .where((o) => o.orderStatus == 'Order Shipped')
+                        .length
+                        .toString(),
+                  ),
+                  _buildStatisticsCard(
+                    'Out for Delivery',
+                    allOrders
+                        .where((o) => o.orderStatus == 'Out for Delivery')
+                        .length
+                        .toString(),
+                  ),
+                ],
+              ),
             ),
           ),
         ),
@@ -135,7 +152,7 @@ class DesktopOrderScreen extends StatelessWidget {
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    Text(
+                    SelectableText(
                       'Orders (${filteredOrders.length})',
                       style: const TextStyle(
                         fontSize: 18,
@@ -146,19 +163,19 @@ class DesktopOrderScreen extends StatelessWidget {
                       children: [
                         // Sort option
                         DropdownButton<String>(
-                          hint: const Text('Sort by'),
+                          hint: const SelectableText('Sort by'),
                           items: const [
                             DropdownMenuItem(
                               value: 'date',
-                              child: Text('Date'),
+                              child: SelectableText('Date'),
                             ),
                             DropdownMenuItem(
                               value: 'amount',
-                              child: Text('Amount'),
+                              child: SelectableText('Amount'),
                             ),
                             DropdownMenuItem(
                               value: 'status',
-                              child: Text('Status'),
+                              child: SelectableText('Status'),
                             ),
                           ],
                           onChanged: (String? value) {
@@ -181,7 +198,9 @@ class DesktopOrderScreen extends StatelessWidget {
               Expanded(
                 child:
                     filteredOrders.isEmpty
-                        ? const Center(child: Text('No orders found.'))
+                        ? const Center(
+                          child: SelectableText('No orders found.'),
+                        )
                         : _buildOrderDataTable(),
               ),
             ],
@@ -212,36 +231,12 @@ class DesktopOrderScreen extends StatelessWidget {
           columnSpacing: 16, // Reduce column spacing
           horizontalMargin: 12, // Reduce horizontal margins
           columns: const [
-            DataColumn(
-              label: Expanded(
-                child: Text('Order ID', overflow: TextOverflow.ellipsis),
-              ),
-            ),
-            DataColumn(
-              label: Expanded(
-                child: Text('Date', overflow: TextOverflow.ellipsis),
-              ),
-            ),
-            DataColumn(
-              label: Expanded(
-                child: Text('Status', overflow: TextOverflow.ellipsis),
-              ),
-            ),
-            DataColumn(
-              label: Expanded(
-                child: Text('Amount', overflow: TextOverflow.ellipsis),
-              ),
-            ),
-            DataColumn(
-              label: Expanded(
-                child: Text('Delivery', overflow: TextOverflow.ellipsis),
-              ),
-            ),
-            DataColumn(
-              label: Expanded(
-                child: Text('Actions', overflow: TextOverflow.ellipsis),
-              ),
-            ),
+            DataColumn(label: Expanded(child: SelectableText('Order ID'))),
+            DataColumn(label: Expanded(child: SelectableText('Date'))),
+            DataColumn(label: Expanded(child: SelectableText('Status'))),
+            DataColumn(label: Expanded(child: SelectableText('Amount'))),
+            DataColumn(label: Expanded(child: SelectableText('Delivery'))),
+            DataColumn(label: Expanded(child: SelectableText('Actions'))),
           ],
           rows:
               filteredOrders.map((order) {
@@ -258,13 +253,13 @@ class DesktopOrderScreen extends StatelessWidget {
                   }),
                   cells: [
                     DataCell(
-                      Text(
+                      SelectableText(
                         order.id,
                         style: const TextStyle(fontWeight: FontWeight.bold),
                       ),
                     ),
                     DataCell(
-                      Text(
+                      SelectableText(
                         '${order.createdAt.day}/${order.createdAt.month}/${order.createdAt.year}',
                       ),
                     ),
@@ -278,16 +273,18 @@ class DesktopOrderScreen extends StatelessWidget {
                           color: getStatusColor(order.orderStatus),
                           borderRadius: BorderRadius.circular(12),
                         ),
-                        child: Text(
+                        child: SelectableText(
                           order.orderStatus,
                           style: const TextStyle(color: Colors.white),
                         ),
                       ),
                     ),
                     DataCell(
-                      Text('LKR ${order.totalAmount.toStringAsFixed(2)}'),
+                      SelectableText(
+                        'LKR ${order.totalAmount.toStringAsFixed(2)}',
+                      ),
                     ),
-                    DataCell(Text(order.deliveryOption)),
+                    DataCell(SelectableText(order.deliveryOption)),
                     DataCell(
                       Row(
                         children: [
@@ -296,7 +293,8 @@ class DesktopOrderScreen extends StatelessWidget {
                             tooltip: 'View Details',
                             onPressed: () => onOrderSelect(order),
                           ),
-                          if (order.orderStatus == 'Order Placed')
+                          if (order.orderStatus == 'Order Placed' ||
+                              order.orderStatus == 'Order Processing')
                             IconButton(
                               icon: const Icon(Icons.edit, size: 18),
                               tooltip: 'Edit Order',
@@ -327,16 +325,20 @@ class DesktopOrderScreen extends StatelessWidget {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text(
-                'Order #${order.id}',
-                style: const TextStyle(
-                  fontSize: 24,
-                  fontWeight: FontWeight.bold,
+              Expanded(
+                // Add Expanded to constrain the text width
+                child: SelectableText(
+                  'Order #${order.id}',
+                  style: const TextStyle(
+                    fontSize: 20,
+                    fontWeight: FontWeight.bold,
+                  ),
+                  // overflow: TextOverflow.ellipsis, // Add overflow handling
                 ),
               ),
               IconButton(
                 icon: const Icon(Icons.close),
-                onPressed: onDeselectOrder, // Use the correct callback
+                onPressed: onDeselectOrder,
               ),
             ],
           ),
@@ -354,7 +356,7 @@ class DesktopOrderScreen extends StatelessWidget {
                 ),
               ),
               const SizedBox(width: 8),
-              Text(
+              SelectableText(
                 order.orderStatus,
                 style: TextStyle(
                   color: getStatusColor(order.orderStatus),
@@ -398,6 +400,7 @@ class DesktopOrderScreen extends StatelessWidget {
           // Order items section
           _buildDetailSection('Order Items', [], hasItems: true),
 
+          // Item rows in Card
           Card(
             elevation: 0,
             shape: RoundedRectangleBorder(
@@ -413,35 +416,35 @@ class DesktopOrderScreen extends StatelessWidget {
                     children: const [
                       Expanded(
                         flex: 3,
-                        child: Text(
+                        child: SelectableText(
                           'Product',
                           style: TextStyle(fontWeight: FontWeight.bold),
                         ),
                       ),
                       Expanded(
                         flex: 1,
-                        child: Text(
+                        child: SelectableText(
                           'Qty',
                           style: TextStyle(fontWeight: FontWeight.bold),
                         ),
                       ),
                       Expanded(
                         flex: 1,
-                        child: Text(
+                        child: SelectableText(
                           'Unit',
                           style: TextStyle(fontWeight: FontWeight.bold),
                         ),
                       ),
                       Expanded(
                         flex: 2,
-                        child: Text(
+                        child: SelectableText(
                           'Price',
                           style: TextStyle(fontWeight: FontWeight.bold),
                         ),
                       ),
                       Expanded(
                         flex: 2,
-                        child: Text(
+                        child: SelectableText(
                           'Total',
                           style: TextStyle(fontWeight: FontWeight.bold),
                         ),
@@ -457,21 +460,27 @@ class DesktopOrderScreen extends StatelessWidget {
                           padding: const EdgeInsets.symmetric(vertical: 8.0),
                           child: Row(
                             children: [
-                              Expanded(flex: 3, child: Text(item.productName)),
+                              Expanded(
+                                flex: 3,
+                                child: SelectableText(item.productName),
+                              ),
                               Expanded(
                                 flex: 1,
-                                child: Text('${item.quantity}'),
+                                child: SelectableText('${item.quantity}'),
                               ),
-                              Expanded(flex: 1, child: Text(item.unit)),
+                              Expanded(
+                                flex: 1,
+                                child: SelectableText(item.unit),
+                              ),
                               Expanded(
                                 flex: 2,
-                                child: Text(
+                                child: SelectableText(
                                   'LKR ${item.price.toStringAsFixed(2)}',
                                 ),
                               ),
                               Expanded(
                                 flex: 2,
-                                child: Text(
+                                child: SelectableText(
                                   'LKR ${item.itemTotal.toStringAsFixed(2)}',
                                   style: const TextStyle(
                                     fontWeight: FontWeight.bold,
@@ -490,10 +499,13 @@ class DesktopOrderScreen extends StatelessWidget {
                   Row(
                     children: [
                       const Spacer(flex: 5),
-                      const Expanded(flex: 2, child: Text('Subtotal:')),
+                      const Expanded(
+                        flex: 2,
+                        child: SelectableText('Subtotal:'),
+                      ),
                       Expanded(
                         flex: 2,
-                        child: Text(
+                        child: SelectableText(
                           'LKR ${calculateSubtotal(order).toStringAsFixed(2)}',
                         ),
                       ),
@@ -503,10 +515,13 @@ class DesktopOrderScreen extends StatelessWidget {
                   Row(
                     children: [
                       const Spacer(flex: 5),
-                      const Expanded(flex: 2, child: Text('Discount:')),
+                      const Expanded(
+                        flex: 2,
+                        child: SelectableText('Discount:'),
+                      ),
                       Expanded(
                         flex: 2,
-                        child: Text(
+                        child: SelectableText(
                           '-LKR ${calculateDiscount(order).toStringAsFixed(2)}',
                           style: const TextStyle(color: Colors.red),
                         ),
@@ -519,14 +534,14 @@ class DesktopOrderScreen extends StatelessWidget {
                       const Spacer(flex: 5),
                       const Expanded(
                         flex: 2,
-                        child: Text(
+                        child: SelectableText(
                           'Total:',
                           style: TextStyle(fontWeight: FontWeight.bold),
                         ),
                       ),
                       Expanded(
                         flex: 2,
-                        child: Text(
+                        child: SelectableText(
                           'LKR ${order.totalAmount.toStringAsFixed(2)}',
                           style: const TextStyle(fontWeight: FontWeight.bold),
                         ),
@@ -541,7 +556,8 @@ class DesktopOrderScreen extends StatelessWidget {
           const SizedBox(height: 24),
 
           // Actions
-          if (order.orderStatus == 'Order Placed')
+          if (order.orderStatus == 'Order Placed' ||
+              order.orderStatus == 'Order Processing')
             Row(
               mainAxisAlignment: MainAxisAlignment.end,
               children: [
@@ -573,7 +589,7 @@ class DesktopOrderScreen extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(
+        SelectableText(
           title,
           style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
         ),
@@ -591,8 +607,8 @@ class DesktopOrderScreen extends StatelessWidget {
         child: Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            Text(label),
-            Text(
+            SelectableText(label),
+            SelectableText(
               value,
               style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
             ),

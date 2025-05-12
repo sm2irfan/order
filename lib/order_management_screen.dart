@@ -3,6 +3,9 @@ import 'package:flutter/material.dart';
 import 'package:order_management/models/order_model.dart';
 import 'package:order_management/screens/desktop_order_screen.dart';
 import 'package:order_management/screens/mobile_order_screen.dart';
+import 'package:order_management/services/auth_service.dart';
+import 'package:order_management/services/sync_service.dart';
+import 'package:order_management/database/database_helper.dart';
 
 class OrderManagementScreen extends StatefulWidget {
   const OrderManagementScreen({super.key});
@@ -22,121 +25,139 @@ class _OrderManagementScreenState extends State<OrderManagementScreen> {
   final List<String> _orderStatuses = [
     'All',
     'Order Placed',
-    'In Transit',
+    'Order Processing',
+    'Order Shipped',
+    'Out for Delivery',
     'Delivered',
-    'Cancelled',
+    'Order Cancelled',
   ];
+
+  bool _isSyncing = false;
+  final SyncService _syncService = SyncService.instance;
+  final AuthService _authService = AuthService.instance;
+  final DatabaseHelper _dbHelper = DatabaseHelper.instance;
 
   @override
   void initState() {
     super.initState();
-    _loadSampleOrders();
-    _filterOrders();
+    _loadOrdersFromDatabase();
     _searchController.addListener(_filterOrders);
   }
 
-  void _loadSampleOrders() {
-    // Sample data mimicking the SQL structure
-    _allOrders = [
-      Order(
-        id: 'ORD001',
-        userId: 'user1-uuid-example',
-        totalAmount: 250.75,
-        deliveryOption: 'Home Delivery',
-        deliveryAddress: '123 Main St, Colombo',
-        deliveryTimeSlot: '10 AM - 12 PM',
-        paymentMethod: 'Credit Card',
-        orderStatus: 'Delivered',
-        createdAt: DateTime.now().subtract(const Duration(days: 5)),
-        deliveryPartnerName: 'QuickDeliv',
-        deliveryPartnerPhone: '0771234567',
-        items: [
-          OrderDetail(
-            productId: 101,
-            productName: 'Apples',
-            quantity: 2,
-            unit: 'kg',
-            price: 100.00,
-            discount: 5,
-          ),
-          OrderDetail(
-            productId: 102,
-            productName: 'Milk',
-            quantity: 1,
-            unit: 'L',
-            price: 50.75,
-          ),
-        ],
-      ),
-      Order(
-        id: 'ORD002',
-        userId: 'user2-uuid-example',
-        totalAmount: 150.50,
-        deliveryOption: 'Store Pickup',
-        paymentMethod: 'Cash on Delivery',
-        orderStatus: 'In Transit',
-        createdAt: DateTime.now().subtract(const Duration(days: 2)),
-        deliveryPartnerName: 'FastMovers',
-        deliveryPartnerPhone: '0719876543',
-        items: [
-          OrderDetail(
-            productId: 103,
-            productName: 'Bread',
-            quantity: 5,
-            unit: 'pack',
-            price: 20.00,
-            discount: 10,
-          ),
-          OrderDetail(
-            productId: 101,
-            productName: 'Bananas',
-            quantity: 1,
-            unit: 'kg',
-            price: 50.50,
-          ),
-        ],
-      ),
-      Order(
-        id: 'ORD003',
-        userId: 'user3-uuid-example',
-        totalAmount: 75.00,
-        deliveryOption: 'Home Delivery',
-        deliveryAddress: '456 Lake Rd, Kandy',
-        deliveryTimeSlot: '2 PM - 4 PM',
-        paymentMethod: 'Mobile Payment',
-        orderStatus: 'Order Placed',
-        createdAt: DateTime.now().subtract(const Duration(hours: 3)),
-        items: [
-          OrderDetail(
-            productId: 102,
-            productName: 'Eggs',
-            quantity: 3,
-            unit: 'dozen',
-            price: 25.00,
-          ),
-        ],
-      ),
-      Order(
-        id: 'ORD004',
-        userId: 'user4-uuid-example',
-        totalAmount: 90.00,
-        deliveryOption: 'Home Delivery',
-        deliveryAddress: '789 Beach Ave, Galle',
-        deliveryTimeSlot: 'ASAP',
-        paymentMethod: 'Credit Card',
-        orderStatus: 'Cancelled',
-        createdAt: DateTime.now().subtract(const Duration(days: 1)),
-        items: [
-          OrderDetail(
-            productId: 105,
-            productName: 'Juice',
-            quantity: 2,
-            unit: 'bottle',
-            price: 45.00,
-          ),
-        ],
-      ),
-    ];
+  Future<void> _loadOrdersFromDatabase() async {
+    try {
+      setState(() {
+        _isSyncing = true;
+      });
+
+      // Get all orders from the database
+      final List<Map<String, dynamic>> ordersData = await _dbHelper.getOrders();
+
+      // need to print order count
+      print('Total orders fetched: ${ordersData.length}');
+
+      // Get all products to create a lookup map for product names
+      final List<Map<String, dynamic>> productsData =
+          await _dbHelper.getProducts();
+      final Map<int, String> productNameMap = {};
+
+      // Create a map of product IDs to product names for quick lookup
+      for (var product in productsData) {
+        try {
+          productNameMap[product['id'] as int] = product['name'] as String;
+        } catch (e) {
+          print('Error mapping product: ${e.toString()}');
+        }
+      }
+
+      final List<Order> loadedOrders = [];
+
+      // Process each order
+      for (final orderData in ordersData) {
+        try {
+          // Get order details for this order
+          final String orderId = orderData['id'] as String;
+          final List<Map<String, dynamic>> orderDetailsData = await _dbHelper
+              .getOrderDetails(orderId);
+
+          // Create OrderDetail objects
+          final List<OrderDetail> orderDetails = [];
+
+          for (var detail in orderDetailsData) {
+            try {
+              final int productId = detail['product_id'] as int;
+              final String productName =
+                  productNameMap[productId] ?? 'Unknown Product';
+
+              orderDetails.add(
+                OrderDetail(
+                  productId: productId,
+                  productName: productName,
+                  quantity: detail['quantity'] as int,
+                  unit: detail['unit'] as String,
+                  discount: detail['discount'] as int?,
+                  price: detail['price'] as double,
+                ),
+              );
+            } catch (e) {
+              print('Error creating order detail: ${e.toString()}');
+            }
+          }
+
+          // Parse the date from string to DateTime
+          DateTime createdAt;
+          try {
+            createdAt = DateTime.parse(orderData['created_at'] as String);
+          } catch (e) {
+            createdAt = DateTime.now(); // Fallback to now if parsing fails
+            print('Failed to parse date for order $orderId: $e');
+          }
+
+          // Create the Order object
+          loadedOrders.add(
+            Order(
+              id: orderId,
+              userId: orderData['user_id'] as String?,
+              totalAmount: orderData['total_amount'] as double,
+              deliveryOption: orderData['delivery_option'] as String,
+              deliveryAddress: orderData['delivery_address'] as String?,
+              deliveryTimeSlot: orderData['delivery_time_slot'] as String?,
+              paymentMethod: orderData['payment_method'] as String,
+              orderStatus: orderData['order_status'] as String,
+              createdAt: createdAt,
+              deliveryPartnerName:
+                  orderData['delivery_partner_name'] as String?,
+              deliveryPartnerPhone:
+                  orderData['delivery_partner_phone'] as String?,
+              items: orderDetails,
+            ),
+          );
+        } catch (e) {
+          print('Error processing order: ${e.toString()}');
+        }
+      }
+
+      // Update state with the loaded orders
+      setState(() {
+        _allOrders = loadedOrders;
+        _filterOrders();
+        _isSyncing = false;
+      });
+    } catch (e) {
+      print('Error loading orders from database: ${e.toString()}');
+      setState(() {
+        _isSyncing = false;
+        _allOrders = []; // Clear orders on error
+        _filteredOrders = [];
+      });
+
+      // Show error message
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to load orders: ${e.toString()}')),
+        );
+      }
+    }
   }
 
   void _filterOrders() {
@@ -211,9 +232,12 @@ class _OrderManagementScreenState extends State<OrderManagementScreen> {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(label, style: const TextStyle(fontWeight: FontWeight.bold)),
+          SelectableText(
+            label,
+            style: const TextStyle(fontWeight: FontWeight.bold),
+          ),
           const SizedBox(width: 8),
-          Expanded(child: Text(value)),
+          Expanded(child: SelectableText(value)),
         ],
       ),
     );
@@ -223,11 +247,15 @@ class _OrderManagementScreenState extends State<OrderManagementScreen> {
     switch (status) {
       case 'Delivered':
         return Colors.green;
-      case 'In Transit':
+      case 'Order Shipped':
         return Colors.blue;
+      case 'Out for Delivery':
+        return Colors.indigo;
       case 'Order Placed':
         return Colors.orange;
-      case 'Cancelled':
+      case 'Order Processing':
+        return Colors.amber;
+      case 'Order Cancelled':
         return Colors.red;
       default:
         return Colors.grey;
@@ -239,7 +267,7 @@ class _OrderManagementScreenState extends State<OrderManagementScreen> {
       context: context,
       builder: (BuildContext context) {
         return AlertDialog(
-          title: Text('Order Details: ${order.id}'),
+          title: SelectableText('Order Details: ${order.id}'),
           content: SingleChildScrollView(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -267,20 +295,26 @@ class _OrderManagementScreenState extends State<OrderManagementScreen> {
                     order.deliveryPartnerPhone!,
                   ),
                 const SizedBox(height: 10),
-                const Text(
+                const SelectableText(
                   'Items:',
                   style: TextStyle(fontWeight: FontWeight.bold),
                 ),
                 ...order.items.map(
                   (item) => ListTile(
-                    title: Text('${item.productName} (ID: ${item.productId})'),
-                    subtitle: Text(
+                    title: SelectableText(
+                      '${item.productName} (ID: ${item.productId})',
+                    ),
+                    subtitle: SelectableText(
                       '${item.quantity} ${item.unit} @ LKR ${item.price.toStringAsFixed(2)} each',
                     ),
-                    trailing: Text('LKR ${item.itemTotal.toStringAsFixed(2)}'),
+                    trailing: SelectableText(
+                      'LKR ${item.itemTotal.toStringAsFixed(2)}',
+                    ),
                   ),
                 ),
-                if (order.orderStatus == 'Order Placed') ...[
+                // Update the condition for modifiable orders to include only 'Order Placed' and 'Order Processing'
+                if (order.orderStatus == 'Order Placed' ||
+                    order.orderStatus == 'Order Processing') ...[
                   const SizedBox(height: 10),
                   Row(
                     mainAxisAlignment: MainAxisAlignment.end,
@@ -321,18 +355,67 @@ class _OrderManagementScreenState extends State<OrderManagementScreen> {
     );
   }
 
-  void _syncWithDatabase() {
-    // Implement database synchronization logic here
+  Future<void> _syncWithDatabase() async {
+    setState(() {
+      _isSyncing = true;
+    });
+
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(content: Text('Synchronizing with database...')),
     );
 
-    // Mock a sync delay
-    Future.delayed(const Duration(seconds: 2), () {
+    try {
+      // Use the sync service instead of direct implementation
+      final result = await _syncService.syncSupabaseToSQLite();
+
+      if (result.success) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: SelectableText('Database synchronized successfully'),
+          ),
+        );
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: SelectableText(
+              'Sync completed with ${result.errors.length} errors',
+            ),
+            action: SnackBarAction(
+              label: 'Details',
+              onPressed: () {
+                showDialog(
+                  context: context,
+                  builder:
+                      (context) => AlertDialog(
+                        title: const SelectableText('Sync Results'),
+                        content: SingleChildScrollView(
+                          child: SelectableText(result.summary),
+                        ),
+                        actions: [
+                          TextButton(
+                            onPressed: () => Navigator.pop(context),
+                            child: const Text('Close'),
+                          ),
+                        ],
+                      ),
+                );
+              },
+            ),
+          ),
+        );
+      }
+
+      // Reload orders from local database
+      await _loadOrdersFromDatabase();
+    } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Database synchronized successfully')),
+        SnackBar(content: SelectableText('Sync failed: ${e.toString()}')),
       );
-    });
+    } finally {
+      setState(() {
+        _isSyncing = false;
+      });
+    }
   }
 
   @override
@@ -348,10 +431,12 @@ class _OrderManagementScreenState extends State<OrderManagementScreen> {
           IconButton(
             icon: const Icon(Icons.refresh),
             tooltip: 'Refresh Orders',
-            onPressed: () {
-              _loadSampleOrders();
-              _filterOrders();
-            },
+            onPressed: _loadOrdersFromDatabase,
+          ),
+          IconButton(
+            icon: const Icon(Icons.logout),
+            tooltip: 'Logout',
+            onPressed: () => _authService.handleLogout(context),
           ),
           const SizedBox(width: 10),
         ],
@@ -365,16 +450,37 @@ class _OrderManagementScreenState extends State<OrderManagementScreen> {
               horizontal: 16.0,
             ),
             color: Colors.grey[200],
-            child: ElevatedButton.icon(
-              onPressed: _syncWithDatabase,
-              icon: const Icon(Icons.sync),
-              label: const Text('Database Sync'),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.blue,
-                foregroundColor: Colors.white,
-                padding: const EdgeInsets.symmetric(vertical: 12.0),
-              ),
-            ),
+            child:
+                _isSyncing
+                    ? const Center(
+                      child: Padding(
+                        padding: EdgeInsets.all(12.0),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            SizedBox(
+                              height: 20,
+                              width: 20,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2.0,
+                              ),
+                            ),
+                            SizedBox(width: 12),
+                            Text('Syncing database...'),
+                          ],
+                        ),
+                      ),
+                    )
+                    : ElevatedButton.icon(
+                      onPressed: _syncWithDatabase,
+                      icon: const Icon(Icons.sync),
+                      label: const Text('Database Sync'),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.blue,
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(vertical: 12.0),
+                      ),
+                    ),
           ),
           Expanded(
             child:
