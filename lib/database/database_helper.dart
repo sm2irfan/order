@@ -205,6 +205,12 @@ class DatabaseHelper {
     return await db.query('all_products');
   }
 
+  // Get all profiles
+  Future<List<Map<String, dynamic>>> getAllProfiles() async {
+    Database db = await instance.database;
+    return await db.query('profiles');
+  }
+
   // Get a profile by ID
   Future<Map<String, dynamic>?> getProfile(String id) async {
     Database db = await instance.database;

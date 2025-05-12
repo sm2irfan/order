@@ -367,6 +367,18 @@ class DesktopOrderScreen extends StatelessWidget {
           ),
           const SizedBox(height: 24),
 
+          // Customer Information Section
+          if (order.customerName != null ||
+              order.customerPhoneNumber != null) ...[
+            _buildDetailSection('Customer Information', [
+              if (order.customerName != null)
+                buildDetailRow('Name', order.customerName!),
+              if (order.customerPhoneNumber != null)
+                buildDetailRow('Phone', order.customerPhoneNumber!),
+            ]),
+            const SizedBox(height: 24),
+          ],
+
           // Order information section
           _buildDetailSection('Order Information', [
             buildDetailRow(

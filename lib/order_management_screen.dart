@@ -52,16 +52,12 @@ class _OrderManagementScreenState extends State<OrderManagementScreen> {
 
       // Get all orders from the database
       final List<Map<String, dynamic>> ordersData = await _dbHelper.getOrders();
-
-      // need to print order count
       print('Total orders fetched: ${ordersData.length}');
 
       // Get all products to create a lookup map for product names
       final List<Map<String, dynamic>> productsData =
           await _dbHelper.getProducts();
       final Map<int, String> productNameMap = {};
-
-      // Create a map of product IDs to product names for quick lookup
       for (var product in productsData) {
         try {
           productNameMap[product['id'] as int] = product['name'] as String;
@@ -70,13 +66,29 @@ class _OrderManagementScreenState extends State<OrderManagementScreen> {
         }
       }
 
+      // Get all profiles to create a lookup map for customer details
+      final List<Map<String, dynamic>> profilesData =
+          await _dbHelper
+              .getAllProfiles(); // Assuming you add this method to DatabaseHelper
+      final Map<String, Map<String, dynamic>> profileMap = {};
+      for (var profile in profilesData) {
+        try {
+          profileMap[profile['id'] as String] = profile;
+        } catch (e) {
+          print('Error mapping profile: ${e.toString()}');
+        }
+      }
+
       final List<Order> loadedOrders = [];
 
       // Process each order
       for (final orderData in ordersData) {
         try {
-          // Get order details for this order
           final String orderId = orderData['id'] as String;
+          final String? userId = orderData['user_id'] as String?;
+          final Map<String, dynamic>? customerProfile =
+              userId != null ? profileMap[userId] : null;
+
           final List<Map<String, dynamic>> orderDetailsData = await _dbHelper
               .getOrderDetails(orderId);
 
@@ -118,7 +130,9 @@ class _OrderManagementScreenState extends State<OrderManagementScreen> {
           loadedOrders.add(
             Order(
               id: orderId,
-              userId: orderData['user_id'] as String?,
+              userId: userId,
+              customerName: customerProfile?['full_name'] as String?,
+              customerPhoneNumber: customerProfile?['phone_number'] as String?,
               totalAmount: orderData['total_amount'] as double,
               deliveryOption: orderData['delivery_option'] as String,
               deliveryAddress: orderData['delivery_address'] as String?,
@@ -274,6 +288,13 @@ class _OrderManagementScreenState extends State<OrderManagementScreen> {
               crossAxisAlignment: CrossAxisAlignment.start,
               mainAxisSize: MainAxisSize.min,
               children: <Widget>[
+                if (order.customerName != null)
+                  _buildDetailRow('Customer Name:', order.customerName!),
+                if (order.customerPhoneNumber != null)
+                  _buildDetailRow(
+                    'Customer Phone:',
+                    order.customerPhoneNumber!,
+                  ),
                 _buildDetailRow('Status:', order.orderStatus),
                 _buildDetailRow(
                   'Total Amount:',

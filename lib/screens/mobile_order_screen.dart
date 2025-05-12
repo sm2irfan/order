@@ -123,6 +123,14 @@ class MobileOrderScreen extends StatelessWidget {
                                 SelectableText(
                                   'Total: LKR ${order.totalAmount.toStringAsFixed(2)}',
                                 ),
+                                if (order.customerName != null)
+                                  SelectableText(
+                                    'Customer: ${order.customerName}',
+                                    style: TextStyle(
+                                      fontSize: 12,
+                                      color: Colors.grey[700],
+                                    ),
+                                  ),
                                 SelectableText(
                                   'Date: ${order.createdAt.day}/${order.createdAt.month}/${order.createdAt.year}',
                                   style: TextStyle(

@@ -1,6 +1,8 @@
 class Order {
   final String id;
   final String? userId;
+  final String? customerName; // New field
+  final String? customerPhoneNumber; // New field
   final double totalAmount;
   final String deliveryOption;
   final String? deliveryAddress;
@@ -15,6 +17,8 @@ class Order {
   Order({
     required this.id,
     this.userId,
+    this.customerName, // New field
+    this.customerPhoneNumber, // New field
     required this.totalAmount,
     required this.deliveryOption,
     this.deliveryAddress,
