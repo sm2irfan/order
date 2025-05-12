@@ -1,0 +1,32 @@
+name: Build Flutter Windows App
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v3
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.29.3'
+          channel: 'stable'
+          cache: true
+
+      - name: Install Dependencies
+        run: flutter pub get
+
+      - name: Build Windows
+        run: flutter build windows
+
+      - name: Upload Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: WindowsApp
+          path: build\windows\x64\runner\Release\
