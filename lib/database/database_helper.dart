@@ -205,6 +205,18 @@ class DatabaseHelper {
     return await db.query('all_products');
   }
 
+  // Get a product by ID
+  Future<Map<String, dynamic>?> getProductById(int productId) async {
+    Database db = await instance.database;
+    List<Map<String, dynamic>> result = await db.query(
+      'all_products',
+      where: 'id = ?',
+      whereArgs: [productId],
+      limit: 1,
+    );
+    return result.isNotEmpty ? result.first : null;
+  }
+
   // Get all profiles
   Future<List<Map<String, dynamic>>> getAllProfiles() async {
     Database db = await instance.database;

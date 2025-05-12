@@ -1,4 +1,4 @@
-// filepath: /home/irfan/StudioProjects/Order/order_management/lib/order_management_screen.dart
+import 'dart:async'; // Import async
 import 'package:flutter/material.dart';
 import 'package:order_management/models/order_model.dart';
 import 'package:order_management/screens/desktop_order_screen.dart';
@@ -6,6 +6,8 @@ import 'package:order_management/screens/mobile_order_screen.dart';
 import 'package:order_management/services/auth_service.dart';
 import 'package:order_management/services/sync_service.dart';
 import 'package:order_management/database/database_helper.dart';
+import 'package:order_management/services/supabase_realtime_service.dart'; // Import the service
+import 'package:supabase_flutter/supabase_flutter.dart'; // Import Supabase client for service instantiation
 
 class OrderManagementScreen extends StatefulWidget {
   const OrderManagementScreen({super.key});
@@ -40,11 +42,218 @@ class _OrderManagementScreenState extends State<OrderManagementScreen> {
   final AuthService _authService = AuthService.instance;
   final DatabaseHelper _dbHelper = DatabaseHelper.instance;
 
+  // Realtime service and subscriptions
+  late SupabaseRealtimeService _realtimeService;
+  StreamSubscription? _newOrderSubscription;
+  StreamSubscription? _updatedOrderSubscription;
+  StreamSubscription? _deletedOrderSubscription;
+
   @override
   void initState() {
     super.initState();
-    _loadOrdersFromDatabase();
+    _loadOrdersFromDatabase(); // Initial load
     _searchController.addListener(_filterOrders);
+
+    // Initialize and subscribe to realtime updates
+    final supabaseClient = Supabase.instance.client;
+    _realtimeService = SupabaseRealtimeService(supabaseClient);
+    _realtimeService.subscribeToOrdersTable();
+
+    _newOrderSubscription = _realtimeService.newOrderStream.listen(
+      _handleNewOrder,
+    );
+    _updatedOrderSubscription = _realtimeService.updatedOrderStream.listen(
+      _handleUpdatedOrder,
+    );
+    _deletedOrderSubscription = _realtimeService.deletedOrderStream.listen(
+      _handleDeletedOrder,
+    );
+  }
+
+  Future<Order?> _fetchFullOrderData(String orderId) async {
+    try {
+      // 1. Fetch order from Supabase (as this is the source of truth for the event)
+      final orderResponseMap =
+          await Supabase.instance.client
+              .from('orders')
+              .select()
+              .eq('id', orderId)
+              .single();
+
+      // Upsert fetched order into local DB
+      await _dbHelper.upsertOrder(orderResponseMap);
+
+      // 2. Fetch order details from Supabase
+      final orderDetailsResponseList = await Supabase.instance.client
+          .from('order_details')
+          .select()
+          .eq('order_id', orderId);
+
+      final List<OrderDetail> orderDetails = [];
+      for (var detailDataMap in orderDetailsResponseList) {
+        // Upsert fetched order detail into local DB
+        // Ensure detailDataMap has an 'id' if your upsertOrderDetail expects it for updates,
+        // or handle it within upsertOrderDetail if it's based on order_id and product_id.
+        // For simplicity, assuming upsertOrderDetail can handle it or it's a new insert.
+        await _dbHelper.upsertOrderDetail(detailDataMap);
+
+        final int productId = detailDataMap['product_id'] as int;
+        String productName = 'Unknown Product (ID: $productId)';
+        double price =
+            (detailDataMap['price'] as num)
+                .toDouble(); // Ensure price is double
+
+        // 3. Fetch product name: Local DB first, then Supabase
+        final localProduct = await _dbHelper.getProductById(productId);
+        if (localProduct != null) {
+          productName =
+              (localProduct['name'] as String?)?.split(' - ').first ??
+              productName;
+        } else {
+          try {
+            final productResponseMap =
+                await Supabase.instance.client
+                    .from('all_products')
+                    .select() // Select all columns to allow upsert
+                    .eq('id', productId)
+                    .single();
+
+            // Upsert fetched product into local DB
+            await _dbHelper.upsertProduct(productResponseMap);
+            productName =
+                (productResponseMap['name'] as String?)?.split(' - ').first ??
+                productName;
+          } catch (e) {
+            print(
+              "Error fetching product name for $productId from Supabase after local miss: $e",
+            );
+          }
+        }
+
+        orderDetails.add(
+          OrderDetail(
+            productId: productId,
+            productName: productName,
+            quantity: detailDataMap['quantity'] as int,
+            unit: detailDataMap['unit'] as String,
+            discount: detailDataMap['discount'] as int?,
+            price: price,
+          ),
+        );
+      }
+
+      // 4. Fetch customer details: Local DB first, then Supabase (if userId exists)
+      String? customerName;
+      String? customerPhoneNumber;
+      final String? userId = orderResponseMap['user_id'] as String?;
+      if (userId != null) {
+        final localProfile = await _dbHelper.getProfile(userId);
+        if (localProfile != null) {
+          customerName = localProfile['full_name'] as String?;
+          customerPhoneNumber = localProfile['phone_number'] as String?;
+        } else {
+          try {
+            final profileResponseMap =
+                await Supabase.instance.client
+                    .from('profiles')
+                    .select() // Select all columns to allow upsert
+                    .eq('id', userId)
+                    .single();
+
+            // Upsert fetched profile into local DB
+            await _dbHelper.upsertProfile(profileResponseMap);
+            customerName = profileResponseMap['full_name'] as String?;
+            customerPhoneNumber = profileResponseMap['phone_number'] as String?;
+          } catch (e) {
+            print(
+              "Error fetching profile for $userId from Supabase after local miss: $e",
+            );
+          }
+        }
+      }
+
+      DateTime createdAt;
+      try {
+        createdAt = DateTime.parse(orderResponseMap['created_at'] as String);
+      } catch (e) {
+        createdAt = DateTime.now(); // Fallback
+        print('Failed to parse date for order $orderId from Supabase: $e');
+      }
+
+      return Order(
+        id: orderResponseMap['id'] as String,
+        userId: userId,
+        customerName: customerName,
+        customerPhoneNumber: customerPhoneNumber,
+        totalAmount: (orderResponseMap['total_amount'] as num).toDouble(),
+        deliveryOption: orderResponseMap['delivery_option'] as String,
+        deliveryAddress: orderResponseMap['delivery_address'] as String?,
+        deliveryTimeSlot: orderResponseMap['delivery_time_slot'] as String?,
+        paymentMethod: orderResponseMap['payment_method'] as String,
+        orderStatus: orderResponseMap['order_status'] as String,
+        createdAt: createdAt,
+        deliveryPartnerName:
+            orderResponseMap['delivery_partner_name'] as String?,
+        deliveryPartnerPhone:
+            orderResponseMap['delivery_partner_phone'] as String?,
+        items: orderDetails,
+      );
+    } catch (e) {
+      print("Error fetching full order data for $orderId: $e");
+      return null;
+    }
+  }
+
+  Future<void> _handleNewOrder(String orderId) async {
+    print('Realtime: Handling new order ID: $orderId');
+    final newOrder = await _fetchFullOrderData(orderId);
+    if (newOrder != null && mounted) {
+      setState(() {
+        // Avoid duplicates if already loaded by initial fetch or sync
+        _allOrders.removeWhere((o) => o.id == newOrder.id);
+        _allOrders.insert(0, newOrder); // Insert at the beginning
+        _filterOrders();
+      });
+    }
+  }
+
+  Future<void> _handleUpdatedOrder(String orderId) async {
+    print('Realtime: Handling updated order ID: $orderId');
+    final updatedOrder = await _fetchFullOrderData(orderId);
+    if (updatedOrder != null && mounted) {
+      setState(() {
+        final index = _allOrders.indexWhere((o) => o.id == orderId);
+        if (index != -1) {
+          _allOrders[index] = updatedOrder;
+        } else {
+          _allOrders.insert(
+            0,
+            updatedOrder,
+          ); // Add if not found (e.g., missed insert)
+        }
+        _filterOrders();
+        // If the selected order is the one updated, refresh its view
+        if (_selectedOrder?.id == orderId) {
+          _selectedOrder = updatedOrder;
+        }
+      });
+    }
+  }
+
+  void _handleDeletedOrder(Map<String, dynamic> deletedOrderData) {
+    final String? orderId = deletedOrderData['id'] as String?;
+    if (orderId == null) return;
+
+    print('Realtime: Handling deleted order ID: $orderId');
+    if (mounted) {
+      setState(() {
+        _allOrders.removeWhere((o) => o.id == orderId);
+        if (_selectedOrder?.id == orderId) {
+          _selectedOrder = null;
+        }
+        _filterOrders();
+      });
+    }
   }
 
   Future<void> _loadOrdersFromDatabase() async {
@@ -179,6 +388,10 @@ class _OrderManagementScreenState extends State<OrderManagementScreen> {
   @override
   void dispose() {
     _searchController.dispose();
+    _newOrderSubscription?.cancel();
+    _updatedOrderSubscription?.cancel();
+    _deletedOrderSubscription?.cancel();
+    _realtimeService.dispose(); // Dispose the service instance
     super.dispose();
   }
 

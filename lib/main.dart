@@ -6,6 +6,7 @@ import 'package:order_management/database/database_helper.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'dart:io';
+import 'package:order_management/services/supabase_realtime_service.dart';
 
 void main() async {
   // Ensure Flutter bindings are initialized
@@ -29,6 +30,11 @@ void main() async {
 
   // Initialize the database
   await DatabaseHelper.instance.database;
+
+  // Initialize and subscribe to real-time updates
+  final supabaseClient = Supabase.instance.client;
+  final realtimeService = SupabaseRealtimeService(supabaseClient);
+  realtimeService.subscribeToOrdersTable();
 
   runApp(const MyApp());
 }
