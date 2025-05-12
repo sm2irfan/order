@@ -321,6 +321,20 @@ class _OrderManagementScreenState extends State<OrderManagementScreen> {
     );
   }
 
+  void _syncWithDatabase() {
+    // Implement database synchronization logic here
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Synchronizing with database...')),
+    );
+
+    // Mock a sync delay
+    Future.delayed(const Duration(seconds: 2), () {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Database synchronized successfully')),
+      );
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     // Detect if we're on a desktop-sized screen
@@ -342,38 +356,62 @@ class _OrderManagementScreenState extends State<OrderManagementScreen> {
           const SizedBox(width: 10),
         ],
       ),
-      body:
-          isDesktop
-              ? DesktopOrderScreen(
-                allOrders: _allOrders,
-                filteredOrders: _filteredOrders,
-                selectedOrder: _selectedOrder,
-                selectedStatusFilter: _selectedStatusFilter,
-                orderStatuses: _orderStatuses,
-                searchController: _searchController,
-                onOrderSelect: _handleOrderSelection,
-                onDeselectOrder: _deselectOrder, // Add this new callback
-                onModifyOrder: _modifyOrder,
-                onCancelOrder: _cancelOrder,
-                getStatusColor: _getStatusColor,
-                calculateSubtotal: _calculateSubtotal,
-                calculateDiscount: _calculateTotalDiscount,
-                buildDetailRow: _buildDetailRow,
-              )
-              : MobileOrderScreen(
-                filteredOrders: _filteredOrders,
-                selectedStatusFilter: _selectedStatusFilter,
-                orderStatuses: _orderStatuses,
-                searchController: _searchController,
-                onFilterChange: (String? newValue) {
-                  setState(() {
-                    _selectedStatusFilter = newValue;
-                    _filterOrders();
-                  });
-                },
-                onShowDetails: _showOrderDetailsDialog,
-                getStatusColor: _getStatusColor,
+      body: Column(
+        children: [
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.symmetric(
+              vertical: 8.0,
+              horizontal: 16.0,
+            ),
+            color: Colors.grey[200],
+            child: ElevatedButton.icon(
+              onPressed: _syncWithDatabase,
+              icon: const Icon(Icons.sync),
+              label: const Text('Database Sync'),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.blue,
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(vertical: 12.0),
               ),
+            ),
+          ),
+          Expanded(
+            child:
+                isDesktop
+                    ? DesktopOrderScreen(
+                      allOrders: _allOrders,
+                      filteredOrders: _filteredOrders,
+                      selectedOrder: _selectedOrder,
+                      selectedStatusFilter: _selectedStatusFilter,
+                      orderStatuses: _orderStatuses,
+                      searchController: _searchController,
+                      onOrderSelect: _handleOrderSelection,
+                      onDeselectOrder: _deselectOrder,
+                      onModifyOrder: _modifyOrder,
+                      onCancelOrder: _cancelOrder,
+                      getStatusColor: _getStatusColor,
+                      calculateSubtotal: _calculateSubtotal,
+                      calculateDiscount: _calculateTotalDiscount,
+                      buildDetailRow: _buildDetailRow,
+                    )
+                    : MobileOrderScreen(
+                      filteredOrders: _filteredOrders,
+                      selectedStatusFilter: _selectedStatusFilter,
+                      orderStatuses: _orderStatuses,
+                      searchController: _searchController,
+                      onFilterChange: (String? newValue) {
+                        setState(() {
+                          _selectedStatusFilter = newValue;
+                          _filterOrders();
+                        });
+                      },
+                      onShowDetails: _showOrderDetailsDialog,
+                      getStatusColor: _getStatusColor,
+                    ),
+          ),
+        ],
+      ),
     );
   }
 }

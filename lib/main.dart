@@ -1,8 +1,26 @@
 // filepath: /home/irfan/StudioProjects/Order/order_management/lib/main.dart
 import 'package:flutter/material.dart';
-import 'package:order_management/order_management_screen.dart'; // Assuming this path
+import 'package:order_management/order_management_screen.dart';
+import 'package:order_management/database/database_helper.dart';
+import 'package:sqflite_common_ffi/sqflite_ffi.dart';
+import 'dart:io';
 
-void main() {
+void main() async {
+  // Ensure Flutter bindings are initialized
+  WidgetsFlutterBinding.ensureInitialized();
+
+  // Initialize FFI for SQLite on desktop platforms
+  if (Platform.isLinux || Platform.isWindows || Platform.isMacOS) {
+    // Initialize FFI
+    sqfliteFfiInit();
+    // Change the default factory
+    databaseFactory = databaseFactoryFfi;
+    print('Using FFI SQLite implementation');
+  }
+
+  // Initialize the database
+  await DatabaseHelper.instance.database;
+
   runApp(const MyApp());
 }
 
