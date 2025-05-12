@@ -22,6 +22,9 @@ class _OrderManagementScreenState extends State<OrderManagementScreen> {
   Order? _selectedOrder;
   final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
 
+  // Keep track of which order details are being fetched
+  final Set<String> _fetchingOrderDetailsFor = {};
+
   final List<String> _orderStatuses = [
     'All',
     'Order Placed',
@@ -50,11 +53,9 @@ class _OrderManagementScreenState extends State<OrderManagementScreen> {
         _isSyncing = true;
       });
 
-      // Get all orders from the database
       final List<Map<String, dynamic>> ordersData = await _dbHelper.getOrders();
       print('Total orders fetched: ${ordersData.length}');
 
-      // Get all products to create a lookup map for product names
       final List<Map<String, dynamic>> productsData =
           await _dbHelper.getProducts();
       final Map<int, String> productNameMap = {};
@@ -66,42 +67,23 @@ class _OrderManagementScreenState extends State<OrderManagementScreen> {
         }
       }
 
-      // Get all profiles to create a lookup map for customer details
-      final List<Map<String, dynamic>> profilesData =
-          await _dbHelper
-              .getAllProfiles(); // Assuming you add this method to DatabaseHelper
-      final Map<String, Map<String, dynamic>> profileMap = {};
-      for (var profile in profilesData) {
-        try {
-          profileMap[profile['id'] as String] = profile;
-        } catch (e) {
-          print('Error mapping profile: ${e.toString()}');
-        }
-      }
-
       final List<Order> loadedOrders = [];
 
-      // Process each order
       for (final orderData in ordersData) {
         try {
           final String orderId = orderData['id'] as String;
           final String? userId = orderData['user_id'] as String?;
-          final Map<String, dynamic>? customerProfile =
-              userId != null ? profileMap[userId] : null;
 
           final List<Map<String, dynamic>> orderDetailsData = await _dbHelper
               .getOrderDetails(orderId);
 
-          // Create OrderDetail objects
           final List<OrderDetail> orderDetails = [];
-
           for (var detail in orderDetailsData) {
             try {
               final int productId = detail['product_id'] as int;
               final String productName =
                   (productNameMap[productId]?.split(' - ').first) ??
                   'Unknown Product';
-
               orderDetails.add(
                 OrderDetail(
                   productId: productId,
@@ -117,22 +99,21 @@ class _OrderManagementScreenState extends State<OrderManagementScreen> {
             }
           }
 
-          // Parse the date from string to DateTime
           DateTime createdAt;
           try {
             createdAt = DateTime.parse(orderData['created_at'] as String);
           } catch (e) {
-            createdAt = DateTime.now(); // Fallback to now if parsing fails
+            createdAt = DateTime.now();
             print('Failed to parse date for order $orderId: $e');
           }
 
-          // Create the Order object
           loadedOrders.add(
             Order(
               id: orderId,
               userId: userId,
-              customerName: customerProfile?['full_name'] as String?,
-              customerPhoneNumber: customerProfile?['phone_number'] as String?,
+              // customerName and customerPhoneNumber will be loaded on demand
+              customerName: null,
+              customerPhoneNumber: null,
               totalAmount: orderData['total_amount'] as double,
               deliveryOption: orderData['delivery_option'] as String,
               deliveryAddress: orderData['delivery_address'] as String?,
@@ -152,7 +133,6 @@ class _OrderManagementScreenState extends State<OrderManagementScreen> {
         }
       }
 
-      // Update state with the loaded orders
       setState(() {
         _allOrders = loadedOrders;
         _filterOrders();
@@ -162,11 +142,9 @@ class _OrderManagementScreenState extends State<OrderManagementScreen> {
       print('Error loading orders from database: ${e.toString()}');
       setState(() {
         _isSyncing = false;
-        _allOrders = []; // Clear orders on error
+        _allOrders = [];
         _filteredOrders = [];
       });
-
-      // Show error message
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('Failed to load orders: ${e.toString()}')),
@@ -202,12 +180,6 @@ class _OrderManagementScreenState extends State<OrderManagementScreen> {
   void dispose() {
     _searchController.dispose();
     super.dispose();
-  }
-
-  void _handleOrderSelection(Order order) {
-    setState(() {
-      _selectedOrder = order;
-    });
   }
 
   void _deselectOrder() {
@@ -277,104 +249,273 @@ class _OrderManagementScreenState extends State<OrderManagementScreen> {
     }
   }
 
+  Future<Order> _fetchAndSetCustomerDetails(Order order) async {
+    // Check if details are needed and not already being fetched for this order
+    if (order.userId != null &&
+        (order.customerName == null || order.customerPhoneNumber == null) &&
+        !_fetchingOrderDetailsFor.contains(order.id)) {
+      try {
+        if (mounted) {
+          // Add to fetching set and trigger a rebuild to show loading if dialog is open
+          setState(() {
+            _fetchingOrderDetailsFor.add(order.id);
+          });
+        }
+
+        final profileData = await _dbHelper.getProfile(order.userId!);
+        Order updatedOrder = order; // Start with the original order
+
+        if (profileData != null) {
+          updatedOrder = Order(
+            // Create a new updated order instance
+            id: order.id,
+            userId: order.userId,
+            customerName: profileData['full_name'] as String?,
+            customerPhoneNumber: profileData['phone_number'] as String?,
+            totalAmount: order.totalAmount,
+            deliveryOption: order.deliveryOption,
+            deliveryAddress: order.deliveryAddress,
+            deliveryTimeSlot: order.deliveryTimeSlot,
+            paymentMethod: order.paymentMethod,
+            orderStatus: order.orderStatus,
+            createdAt: order.createdAt,
+            deliveryPartnerName: order.deliveryPartnerName,
+            deliveryPartnerPhone: order.deliveryPartnerPhone,
+            items: order.items,
+          );
+
+          if (mounted) {
+            setState(() {
+              int allOrdersIndex = _allOrders.indexWhere(
+                (o) => o.id == order.id,
+              );
+              if (allOrdersIndex != -1) {
+                _allOrders[allOrdersIndex] = updatedOrder;
+              }
+              int filteredOrdersIndex = _filteredOrders.indexWhere(
+                (o) => o.id == order.id,
+              );
+              if (filteredOrdersIndex != -1) {
+                _filteredOrders[filteredOrdersIndex] = updatedOrder;
+              }
+              if (_selectedOrder?.id == order.id) {
+                _selectedOrder = updatedOrder;
+              }
+            });
+          }
+        }
+        return updatedOrder; // Return the (potentially) updated order
+      } catch (e) {
+        print("Error fetching customer details for order ${order.id}: $e");
+        return order; // Return original order on error
+      } finally {
+        if (mounted) {
+          // Remove from fetching set and trigger a rebuild
+          setState(() {
+            _fetchingOrderDetailsFor.remove(order.id);
+          });
+        }
+      }
+    }
+    // If details already exist, no user ID, or already fetching (though caught by outer if), return original order
+    return order;
+  }
+
+  void _handleOrderSelection(Order order) async {
+    setState(() {
+      _selectedOrder = order; // Select immediately
+    });
+    // Fetch details and get the potentially updated order
+    Order updatedOrder = await _fetchAndSetCustomerDetails(order);
+    // If the selection hasn't changed and the order instance in state needs update
+    if (mounted &&
+        _selectedOrder?.id == updatedOrder.id &&
+        _selectedOrder != updatedOrder) {
+      setState(() {
+        _selectedOrder = updatedOrder;
+      });
+    }
+  }
+
   void _showOrderDetailsDialog(BuildContext context, Order order) {
+    // Initial order instance for the dialog
+    Order initialOrderForDialog = _allOrders.firstWhere(
+      (o) => o.id == order.id,
+      orElse: () => order,
+    );
+    if (_selectedOrder?.id == initialOrderForDialog.id) {
+      initialOrderForDialog = _selectedOrder!;
+    }
+
+    // Trigger fetch if needed, but don't await here.
+    // The dialog will use StatefulBuilder to react to state changes.
+    if (initialOrderForDialog.userId != null &&
+        (initialOrderForDialog.customerName == null ||
+            initialOrderForDialog.customerPhoneNumber == null) &&
+        !_fetchingOrderDetailsFor.contains(initialOrderForDialog.id)) {
+      // Call it without await, it will manage its own setState calls
+      _fetchAndSetCustomerDetails(initialOrderForDialog);
+    }
+
     showDialog(
       context: context,
       builder: (BuildContext context) {
-        return AlertDialog(
-          title: SelectableText('Order Details: ${order.id}'),
-          content: SingleChildScrollView(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisSize: MainAxisSize.min,
-              children: <Widget>[
-                if (order.customerName != null)
-                  _buildDetailRow('Customer Name:', order.customerName!),
-                if (order.customerPhoneNumber != null)
-                  _buildDetailRow(
-                    'Customer Phone:',
-                    order.customerPhoneNumber!,
-                  ),
-                _buildDetailRow('Status:', order.orderStatus),
-                _buildDetailRow(
-                  'Total Amount:',
-                  'LKR ${order.totalAmount.toStringAsFixed(2)}',
-                ),
-                _buildDetailRow('Payment Method:', order.paymentMethod),
-                _buildDetailRow('Delivery Option:', order.deliveryOption),
-                if (order.deliveryAddress != null)
-                  _buildDetailRow('Delivery Address:', order.deliveryAddress!),
-                if (order.deliveryTimeSlot != null)
-                  _buildDetailRow('Time Slot:', order.deliveryTimeSlot!),
-                if (order.deliveryPartnerName != null)
-                  _buildDetailRow(
-                    'Delivery Partner:',
-                    order.deliveryPartnerName!,
-                  ),
-                if (order.deliveryPartnerPhone != null)
-                  _buildDetailRow(
-                    'Partner Phone:',
-                    order.deliveryPartnerPhone!,
-                  ),
-                const SizedBox(height: 10),
-                const SelectableText(
-                  'Items:',
-                  style: TextStyle(fontWeight: FontWeight.bold),
-                ),
-                ...order.items.map(
-                  (item) => ListTile(
-                    title: SelectableText(
-                      '${item.productName} (ID: ${item.productId})',
-                    ),
-                    subtitle: SelectableText(
-                      '${item.quantity} ${item.unit} @ LKR ${item.price.toStringAsFixed(2)} each',
-                    ),
-                    trailing: SelectableText(
-                      'LKR ${item.itemTotal.toStringAsFixed(2)}',
-                    ),
-                  ),
-                ),
-                // Update the condition for modifiable orders to include only 'Order Placed' and 'Order Processing'
-                if (order.orderStatus == 'Order Placed' ||
-                    order.orderStatus == 'Order Processing') ...[
-                  const SizedBox(height: 10),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.end,
-                    children: [
-                      TextButton(
-                        child: const Text('Modify Order'),
-                        onPressed: () {
-                          Navigator.of(context).pop();
-                          _modifyOrder(order);
-                        },
-                      ),
-                      TextButton(
-                        style: TextButton.styleFrom(
-                          foregroundColor: Colors.red,
+        return StatefulBuilder(
+          builder: (BuildContext context, StateSetter dialogSetState) {
+            // Always get the most current version of the order from the main state
+            Order displayOrder = _allOrders.firstWhere(
+              (o) =>
+                  o.id ==
+                  initialOrderForDialog
+                      .id, // Use initialOrderForDialog.id for lookup
+              orElse: () => initialOrderForDialog,
+            );
+            if (_selectedOrder?.id == displayOrder.id) {
+              displayOrder = _selectedOrder!;
+            }
+
+            final bool isLoading = _fetchingOrderDetailsFor.contains(
+              displayOrder.id,
+            );
+
+            return AlertDialog(
+              title: SelectableText('Order Details: ${displayOrder.id}'),
+              content: SingleChildScrollView(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: <Widget>[
+                    if (isLoading)
+                      Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 8.0),
+                        child: Row(
+                          children: const [
+                            CircularProgressIndicator(strokeWidth: 2.0),
+                            SizedBox(width: 12),
+                            Text("Loading customer..."),
+                          ],
                         ),
-                        child: const Text('Cancel Order'),
-                        onPressed: () {
-                          Navigator.of(context).pop();
-                          _cancelOrder(order);
-                        },
+                      )
+                    else ...[
+                      if (displayOrder.customerName != null)
+                        _buildDetailRow(
+                          'Customer Name:',
+                          displayOrder.customerName!,
+                        ),
+                      if (displayOrder.customerPhoneNumber != null)
+                        _buildDetailRow(
+                          'Customer Phone:',
+                          displayOrder.customerPhoneNumber!,
+                        ),
+                      if (displayOrder.userId != null &&
+                          displayOrder.customerName == null &&
+                          displayOrder.customerPhoneNumber == null &&
+                          !isLoading) // Check !isLoading here
+                        _buildDetailRow(
+                          'Customer Info:',
+                          'Details not available or not found.',
+                        ),
+                    ],
+                    _buildDetailRow('Status:', displayOrder.orderStatus),
+                    _buildDetailRow(
+                      'Total Amount:',
+                      'LKR ${displayOrder.totalAmount.toStringAsFixed(2)}',
+                    ),
+                    _buildDetailRow(
+                      'Payment Method:',
+                      displayOrder.paymentMethod,
+                    ),
+                    _buildDetailRow(
+                      'Delivery Option:',
+                      displayOrder.deliveryOption,
+                    ),
+                    if (displayOrder.deliveryAddress != null)
+                      _buildDetailRow(
+                        'Delivery Address:',
+                        displayOrder.deliveryAddress!,
+                      ),
+                    if (displayOrder.deliveryTimeSlot != null)
+                      _buildDetailRow(
+                        'Time Slot:',
+                        displayOrder.deliveryTimeSlot!,
+                      ),
+                    if (displayOrder.deliveryPartnerName != null)
+                      _buildDetailRow(
+                        'Delivery Partner:',
+                        displayOrder.deliveryPartnerName!,
+                      ),
+                    if (displayOrder.deliveryPartnerPhone != null)
+                      _buildDetailRow(
+                        'Partner Phone:',
+                        displayOrder.deliveryPartnerPhone!,
+                      ),
+                    const SizedBox(height: 10),
+                    const SelectableText(
+                      'Items:',
+                      style: TextStyle(fontWeight: FontWeight.bold),
+                    ),
+                    ...displayOrder.items.map(
+                      (item) => ListTile(
+                        title: SelectableText(
+                          '${item.productName} (ID: ${item.productId})',
+                        ),
+                        subtitle: SelectableText(
+                          '${item.quantity} ${item.unit} @ LKR ${item.price.toStringAsFixed(2)} each',
+                        ),
+                        trailing: SelectableText(
+                          'LKR ${item.itemTotal.toStringAsFixed(2)}',
+                        ),
+                      ),
+                    ),
+                    if (displayOrder.orderStatus == 'Order Placed' ||
+                        displayOrder.orderStatus == 'Order Processing') ...[
+                      const SizedBox(height: 10),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.end,
+                        children: [
+                          TextButton(
+                            child: const Text('Modify Order'),
+                            onPressed: () {
+                              Navigator.of(context).pop();
+                              _modifyOrder(displayOrder);
+                            },
+                          ),
+                          TextButton(
+                            style: TextButton.styleFrom(
+                              foregroundColor: Colors.red,
+                            ),
+                            child: const Text('Cancel Order'),
+                            onPressed: () {
+                              Navigator.of(context).pop();
+                              _cancelOrder(displayOrder);
+                            },
+                          ),
+                        ],
                       ),
                     ],
-                  ),
-                ],
+                  ],
+                ),
+              ),
+              actions: <Widget>[
+                TextButton(
+                  child: const Text('Close'),
+                  onPressed: () {
+                    Navigator.of(context).pop();
+                  },
+                ),
               ],
-            ),
-          ),
-          actions: <Widget>[
-            TextButton(
-              child: const Text('Close'),
-              onPressed: () {
-                Navigator.of(context).pop();
-              },
-            ),
-          ],
+            );
+          },
         );
       },
-    );
+    ).then((_) {
+      // Ensure UI reflects any state changes if needed after dialog closes
+      // This might be redundant if _fetchAndSetCustomerDetails already called setState
+      // but good for ensuring consistency if the dialog itself modified state.
+      if (mounted) {
+        setState(() {});
+      }
+    });
   }
 
   Future<void> _syncWithDatabase() async {

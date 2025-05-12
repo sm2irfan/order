@@ -134,6 +134,13 @@ class DesktopOrderScreen extends StatelessWidget {
                         .length
                         .toString(),
                   ),
+                  _buildStatisticsCard(
+                    'Cancelled', // Added this
+                    allOrders
+                        .where((o) => o.orderStatus == 'Order Cancelled')
+                        .length
+                        .toString(),
+                  ),
                 ],
               ),
             ),
@@ -368,16 +375,38 @@ class DesktopOrderScreen extends StatelessWidget {
           const SizedBox(height: 24),
 
           // Customer Information Section
-          if (order.customerName != null ||
-              order.customerPhoneNumber != null) ...[
-            _buildDetailSection('Customer Information', [
+          // Show loading or data
+          _buildDetailSection('Customer Information', [
+            if (order.userId != null &&
+                order.customerName == null &&
+                order.customerPhoneNumber == null)
+              Padding(
+                padding: const EdgeInsets.symmetric(vertical: 8.0),
+                child: Row(
+                  children: const [
+                    CircularProgressIndicator(),
+                    SizedBox(width: 8),
+                    SelectableText("Loading..."),
+                  ],
+                ),
+              )
+            else ...[
               if (order.customerName != null)
                 buildDetailRow('Name', order.customerName!),
               if (order.customerPhoneNumber != null)
                 buildDetailRow('Phone', order.customerPhoneNumber!),
-            ]),
-            const SizedBox(height: 24),
-          ],
+              if (order.customerName == null &&
+                  order.customerPhoneNumber == null &&
+                  order.userId != null)
+                buildDetailRow('Customer:', 'Details not found or no user ID.'),
+              if (order.userId == null)
+                buildDetailRow(
+                  'Customer:',
+                  'No user ID associated with order.',
+                ),
+            ],
+          ]),
+          const SizedBox(height: 24),
 
           // Order information section
           _buildDetailSection('Order Information', [
