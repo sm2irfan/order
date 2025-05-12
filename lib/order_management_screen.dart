@@ -376,12 +376,15 @@ class _OrderManagementScreenState extends State<OrderManagementScreen> {
             return matchesSearchTerm && matchesStatus;
           }).toList();
 
-      // Update selected order if needed
+      // Update selected order if needed, but do not select one if none was previously selected
+      // and the list is simply being filtered.
       if (_selectedOrder != null && !_filteredOrders.contains(_selectedOrder)) {
-        _selectedOrder = _filteredOrders.isNotEmpty ? _filteredOrders[0] : null;
-      } else if (_selectedOrder == null && _filteredOrders.isNotEmpty) {
-        _selectedOrder = _filteredOrders[0];
+        // If the previously selected order is no longer in the filtered list,
+        // deselect it. Or, optionally, select the first of the new filtered list.
+        // For the requirement "don't select any think initially", we should lean towards deselecting.
+        _selectedOrder = null;
       }
+      // The part that automatically selected _filteredOrders[0] if _selectedOrder was null is removed.
     });
   }
 
