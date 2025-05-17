@@ -1,9 +1,11 @@
 import 'dart:async'; // Import async
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:order_management/database/database_helper.dart'; // Import for database access
 
 class SupabaseRealtimeService {
   final SupabaseClient _client;
   RealtimeChannel? _ordersChannel;
+  final DatabaseHelper _dbHelper = DatabaseHelper.instance;
 
   // Stream controllers for different event types
   final _newOrderController = StreamController<String>.broadcast();
@@ -36,12 +38,18 @@ class SupabaseRealtimeService {
                 orderId = payload.newRecord['id'] as String?;
                 if (orderId != null) {
                   _newOrderController.add(orderId);
+
+                  // Update last sync time in config for realtime updates
+                  _updateSyncTimeForRealtime('orders');
                 }
                 break;
               case PostgresChangeEvent.update:
                 orderId = payload.newRecord['id'] as String?;
                 if (orderId != null) {
                   _updatedOrderController.add(orderId);
+
+                  // Update last sync time in config for realtime updates
+                  _updateSyncTimeForRealtime('orders');
                 }
                 break;
               case PostgresChangeEvent.delete:
@@ -54,6 +62,9 @@ class SupabaseRealtimeService {
                       'id': orderId,
                       ...oldRecord,
                     }); // Pass ID and old data
+
+                    // Update last sync time in config for realtime updates
+                    _updateSyncTimeForRealtime('orders');
                   }
                 }
                 break;
@@ -63,6 +74,7 @@ class SupabaseRealtimeService {
         )
         .subscribe((status, [dynamic error]) {
           if (status == 'SUBSCRIBED') {
+            print('Successfully subscribed to realtime orders updates');
           } else if (status == 'CHANNEL_ERROR') {
             print(
               'Error subscribing to real-time orders updates for UI. Error: ${error?.toString()}',
@@ -71,6 +83,37 @@ class SupabaseRealtimeService {
             print('Real-time orders subscription for UI timed out.');
           }
         });
+  }
+
+  // Helper method to update sync times when realtime events occur
+  void _updateSyncTimeForRealtime(String table) {
+    final String currentTime = DateTime.now().toUtc().toIso8601String();
+    String configKey;
+
+    switch (table) {
+      case 'orders':
+        configKey = 'last_sync_orders';
+        break;
+      case 'order_details':
+        configKey = 'last_sync_order_details';
+        break;
+      case 'profiles':
+        configKey = 'last_sync_profiles';
+        break;
+      case 'all_products':
+        configKey = 'last_sync_all_products';
+        break;
+      default:
+        return; // Unknown table
+    }
+
+    // Update the timestamp
+    _dbHelper
+        .setConfigValue(configKey, currentTime)
+        .then(
+          (_) => print('Updated last sync time for $table via realtime update'),
+        )
+        .catchError((error) => print('Error updating sync time: $error'));
   }
 
   void dispose() {

@@ -91,55 +91,62 @@ class _OrderManagementScreenState extends State<OrderManagementScreen> {
 
       final List<OrderDetail> orderDetails = [];
       for (var detailDataMap in orderDetailsResponseList) {
-        // Upsert fetched order detail into local DB
-        // Ensure detailDataMap has an 'id' if your upsertOrderDetail expects it for updates,
-        // or handle it within upsertOrderDetail if it's based on order_id and product_id.
-        // For simplicity, assuming upsertOrderDetail can handle it or it's a new insert.
-        await _dbHelper.upsertOrderDetail(detailDataMap);
+        try {
+          // Make a copy to avoid modifying the original data
+          final Map<String, dynamic> detailCopy = Map<String, dynamic>.from(
+            detailDataMap,
+          );
 
-        final int productId = detailDataMap['product_id'] as int;
-        String productName = 'Unknown Product (ID: $productId)';
-        double price =
-            (detailDataMap['price'] as num)
-                .toDouble(); // Ensure price is double
+          // Upsert fetched order detail into local DB
+          await _dbHelper.upsertOrderDetail(detailCopy);
 
-        // 3. Fetch product name: Local DB first, then Supabase
-        final localProduct = await _dbHelper.getProductById(productId);
-        if (localProduct != null) {
-          productName =
-              (localProduct['name'] as String?)?.split(' - ').first ??
-              productName;
-        } else {
-          try {
-            final productResponseMap =
-                await Supabase.instance.client
-                    .from('all_products')
-                    .select() // Select all columns to allow upsert
-                    .eq('id', productId)
-                    .single();
+          final int productId = detailDataMap['product_id'] as int;
+          String productName = 'Unknown Product (ID: $productId)';
+          double price =
+              (detailDataMap['price'] as num)
+                  .toDouble(); // Ensure price is double
 
-            // Upsert fetched product into local DB
-            await _dbHelper.upsertProduct(productResponseMap);
+          // 3. Fetch product name: Local DB first, then Supabase
+          final localProduct = await _dbHelper.getProductById(productId);
+          if (localProduct != null) {
             productName =
-                (productResponseMap['name'] as String?)?.split(' - ').first ??
+                (localProduct['name'] as String?)?.split(' - ').first ??
                 productName;
-          } catch (e) {
-            print(
-              "Error fetching product name for $productId from Supabase after local miss: $e",
-            );
-          }
-        }
+          } else {
+            try {
+              final productResponseMap =
+                  await Supabase.instance.client
+                      .from('all_products')
+                      .select() // Select all columns to allow upsert
+                      .eq('id', productId)
+                      .single();
 
-        orderDetails.add(
-          OrderDetail(
-            productId: productId,
-            productName: productName,
-            quantity: detailDataMap['quantity'] as int,
-            unit: detailDataMap['unit'] as String,
-            discount: detailDataMap['discount'] as int?,
-            price: price,
-          ),
-        );
+              // Upsert fetched product into local DB
+              await _dbHelper.upsertProduct(productResponseMap);
+              productName =
+                  (productResponseMap['name'] as String?)?.split(' - ').first ??
+                  productName;
+            } catch (e) {
+              print(
+                "Error fetching product name for $productId from Supabase after local miss: $e",
+              );
+            }
+          }
+
+          orderDetails.add(
+            OrderDetail(
+              productId: productId,
+              productName: productName,
+              quantity: detailDataMap['quantity'] as int,
+              unit: detailDataMap['unit'] as String,
+              discount: detailDataMap['discount'] as int?,
+              price: price,
+            ),
+          );
+        } catch (e) {
+          print("Error processing order detail for $orderId: $e");
+          // Continue with next detail rather than failing the entire order fetch
+        }
       }
 
       // 4. Fetch customer details: Local DB first, then Supabase (if userId exists)
@@ -153,21 +160,48 @@ class _OrderManagementScreenState extends State<OrderManagementScreen> {
           customerPhoneNumber = localProfile['phone_number'] as String?;
         } else {
           try {
-            final profileResponseMap =
+            // First check if the profile exists to avoid the PostgrestException
+            final profileCheck =
                 await Supabase.instance.client
                     .from('profiles')
-                    .select() // Select all columns to allow upsert
+                    .select('id')
                     .eq('id', userId)
-                    .single();
+                    .maybeSingle(); // Use maybeSingle() instead of single()
 
-            // Upsert fetched profile into local DB
-            await _dbHelper.upsertProfile(profileResponseMap);
-            customerName = profileResponseMap['full_name'] as String?;
-            customerPhoneNumber = profileResponseMap['phone_number'] as String?;
+            if (profileCheck != null) {
+              // Profile exists, fetch complete data
+              final profileResponseMap =
+                  await Supabase.instance.client
+                      .from('profiles')
+                      .select()
+                      .eq('id', userId)
+                      .single();
+
+              // Upsert fetched profile into local DB
+              await _dbHelper.upsertProfile(profileResponseMap);
+              customerName = profileResponseMap['full_name'] as String?;
+              customerPhoneNumber =
+                  profileResponseMap['phone_number'] as String?;
+            } else {
+              // Profile doesn't exist, record this fact but don't treat as error
+              print('No profile found in Supabase for user ID: $userId');
+              customerName = 'No customer profile';
+              customerPhoneNumber = 'N/A';
+
+              // Create a minimal entry in the local database to prevent repeated lookups
+              await _dbHelper.upsertProfile({
+                'id': userId,
+                'full_name': customerName,
+                'phone_number': customerPhoneNumber,
+                'created_at': DateTime.now().toUtc().toIso8601String(),
+                'updated_at': DateTime.now().toUtc().toIso8601String(),
+              });
+            }
           } catch (e) {
-            print(
-              "Error fetching profile for $userId from Supabase after local miss: $e",
-            );
+            print("Error fetching profile for $userId from Supabase: $e");
+            // Set default values for a missing profile
+            customerName = 'Profile unavailable';
+            customerPhoneNumber = 'Unknown';
           }
         }
       }
@@ -748,37 +782,88 @@ class _OrderManagementScreenState extends State<OrderManagementScreen> {
       final result = await _syncService.syncSupabaseToSQLite();
 
       if (result.success) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: SelectableText('Database synchronized successfully'),
-          ),
-        );
+        if (result.hasWarnings) {
+          // Show a snackbar notification
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Row(
+                children: [
+                  Icon(Icons.warning_amber, color: Colors.amber),
+                  SizedBox(width: 10),
+                  Expanded(child: Text('Sync completed with warnings')),
+                ],
+              ),
+              duration: Duration(seconds: 3),
+            ),
+          );
+
+          // Also show a warning dialog with OK button
+          showDialog(
+            context: context,
+            builder:
+                (context) => AlertDialog(
+                  icon: Icon(
+                    Icons.warning_amber,
+                    color: Colors.amber,
+                    size: 36,
+                  ),
+                  title: Text('Sync Warning'),
+                  content: SingleChildScrollView(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Database sync completed successfully but with ${result.warnings.length} warnings.',
+                        ),
+                        SizedBox(height: 16),
+                        Text(
+                          'Some data may not have been synchronized properly. See details for more information.',
+                        ),
+                      ],
+                    ),
+                  ),
+                  actions: [
+                    TextButton(
+                      onPressed: () => Navigator.pop(context),
+                      child: Text('OK'),
+                    ),
+                    TextButton(
+                      onPressed: () {
+                        Navigator.pop(context);
+                        _showSyncDetails(result);
+                      },
+                      child: Text('View Details'),
+                    ),
+                  ],
+                ),
+          );
+        } else {
+          // Show simple success
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Database synchronized successfully')),
+          );
+        }
       } else {
+        // Show error
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: SelectableText(
-              'Sync completed with ${result.errors.length} errors',
+            backgroundColor: Colors.red.shade700,
+            content: Row(
+              children: [
+                Icon(Icons.error_outline, color: Colors.white),
+                SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    'Sync completed with ${result.errors.length} errors',
+                  ),
+                ),
+              ],
             ),
             action: SnackBarAction(
               label: 'Details',
-              onPressed: () {
-                showDialog(
-                  context: context,
-                  builder:
-                      (context) => AlertDialog(
-                        title: const SelectableText('Sync Results'),
-                        content: SingleChildScrollView(
-                          child: SelectableText(result.summary),
-                        ),
-                        actions: [
-                          TextButton(
-                            onPressed: () => Navigator.pop(context),
-                            child: const Text('Close'),
-                          ),
-                        ],
-                      ),
-                );
-              },
+              textColor: Colors.white,
+              onPressed: () => _showSyncDetails(result),
             ),
           ),
         );
@@ -788,13 +873,77 @@ class _OrderManagementScreenState extends State<OrderManagementScreen> {
       await _loadOrdersFromDatabase();
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: SelectableText('Sync failed: ${e.toString()}')),
+        SnackBar(
+          backgroundColor: Colors.red.shade700,
+          content: Text('Sync failed: ${e.toString()}'),
+        ),
       );
     } finally {
       setState(() {
         _isSyncing = false;
       });
     }
+  }
+
+  void _showSyncDetails(SyncResult result) {
+    showDialog(
+      context: context,
+      builder:
+          (context) => AlertDialog(
+            title: Row(
+              children: [
+                if (result.hasWarnings)
+                  Icon(Icons.warning_amber, color: Colors.amber)
+                else if (result.errors.isNotEmpty)
+                  Icon(Icons.error_outline, color: Colors.red),
+                SizedBox(width: 10),
+                Text('Sync Results'),
+              ],
+            ),
+            content: SingleChildScrollView(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  SelectableText(result.summary),
+                  if (result.invalidProducts.isNotEmpty) ...[
+                    SizedBox(height: 16),
+                    Text(
+                      'Products with Issues:',
+                      style: TextStyle(fontWeight: FontWeight.bold),
+                    ),
+                    Container(
+                      height: 150,
+                      decoration: BoxDecoration(
+                        border: Border.all(color: Colors.grey.shade300),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      padding: EdgeInsets.all(8),
+                      margin: EdgeInsets.only(top: 8),
+                      child: ListView.builder(
+                        itemCount: result.invalidProducts.length,
+                        itemBuilder: (context, index) {
+                          final product = result.invalidProducts[index];
+                          return ListTile(
+                            dense: true,
+                            title: Text('Product ID: ${product['id']}'),
+                            subtitle: Text('Issue: ${product['error']}'),
+                          );
+                        },
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text('Close'),
+              ),
+            ],
+          ),
+    );
   }
 
   @override
