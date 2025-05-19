@@ -1,5 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:order_management/models/order_model.dart';
+import 'package:file_picker/file_picker.dart';
+import 'dart:io';
+import 'package:path_provider/path_provider.dart' as path_provider;
+import 'package:flutter/foundation.dart' show kIsWeb, Platform;
+import 'package:order_management/utils/file_export_utils.dart'; // Add this import
 
 class DesktopOrderScreen extends StatefulWidget {
   final List<Order> allOrders;
@@ -41,6 +46,8 @@ class DesktopOrderScreen extends StatefulWidget {
 
 class _DesktopOrderScreenState extends State<DesktopOrderScreen> {
   bool _isPanelOpenedByClick = false;
+  // Add a variable to store the default save location
+  String? _defaultSaveLocation = '/home/irfan/Desktop/daily-log/order_item';
 
   @override
   void didUpdateWidget(covariant DesktopOrderScreen oldWidget) {
@@ -69,6 +76,31 @@ class _DesktopOrderScreenState extends State<DesktopOrderScreen> {
       setState(() {
         _isPanelOpenedByClick = false;
       });
+    }
+  }
+
+  // Add a method to set the default save location
+  Future<void> _setDefaultSaveLocation() async {
+    try {
+      String? selectedDirectory = await FilePicker.platform.getDirectoryPath(
+        dialogTitle: 'Select Default Save Location',
+      );
+
+      if (selectedDirectory != null) {
+        setState(() {
+          _defaultSaveLocation = selectedDirectory;
+        });
+        print('DEBUG: Default save location set to: $_defaultSaveLocation');
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              'Default save location set to: $_defaultSaveLocation',
+            ),
+          ),
+        );
+      }
+    } catch (e) {
+      print('ERROR setting default save location: $e');
     }
   }
 
@@ -585,23 +617,23 @@ class _DesktopOrderScreenState extends State<DesktopOrderScreen> {
                   //     ),
                   //   ],
                   // ),
-                  // const SizedBox(height: 8),
-                  // Row(
-                  //   children: [
-                  //     const Spacer(flex: 5),
-                  //     const Expanded(
-                  //       flex: 2,
-                  //       child: SelectableText('Discount:'),
-                  //     ),
-                  //     Expanded(
-                  //       flex: 2,
-                  //       child: SelectableText(
-                  //         '-LKR ${calculateDiscount(order).toStringAsFixed(2)}',
-                  //         style: const TextStyle(color: Colors.red),
-                  //       ),
-                  //     ),
-                  //   ],
-                  // ),
+                  const SizedBox(height: 8),
+                  Row(
+                    children: [
+                      const Spacer(flex: 5),
+                      const Expanded(
+                        flex: 2,
+                        child: SelectableText('Delivery charge:'),
+                      ),
+                      Expanded(
+                        flex: 2,
+                        child: SelectableText(
+                          '50 Rs',
+                          style: const TextStyle(color: Colors.red),
+                        ),
+                      ),
+                    ],
+                  ),
                   const SizedBox(height: 8),
                   Row(
                     children: [
@@ -623,6 +655,21 @@ class _DesktopOrderScreenState extends State<DesktopOrderScreen> {
                         ),
                       ),
                     ],
+                  ),
+                  const SizedBox(height: 16),
+
+                  // Add Save as Text File button
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    child: ElevatedButton.icon(
+                      icon: const Icon(Icons.description),
+                      label: const Text('Save as Text File'),
+                      onPressed: () => _saveAsTextFile(order),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.blueGrey,
+                        foregroundColor: Colors.white,
+                      ),
+                    ),
                   ),
                 ],
               ),
@@ -691,6 +738,17 @@ class _DesktopOrderScreenState extends State<DesktopOrderScreen> {
           ],
         ),
       ),
+    );
+  }
+
+  // Add this method to save order details as text file
+  void _saveAsTextFile(Order order) async {
+    await OrderFileExport.saveOrderAsTextFile(
+      order: order,
+      context: context,
+      calculateSubtotal: widget.calculateSubtotal,
+      defaultSaveLocation: _defaultSaveLocation,
+      onSetDefaultLocationRequested: _setDefaultSaveLocation,
     );
   }
 }
