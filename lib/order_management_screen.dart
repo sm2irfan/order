@@ -8,6 +8,7 @@ import 'package:order_management/services/sync_service.dart';
 import 'package:order_management/database/database_helper.dart';
 import 'package:order_management/services/supabase_realtime_service.dart'; // Import the service
 import 'package:supabase_flutter/supabase_flutter.dart'; // Import Supabase client for service instantiation
+import 'package:order_management/screens/desktop_order_screen_component/order_status.dart'; // Add this import for OrderStatus widget
 
 class OrderManagementScreen extends StatefulWidget {
   const OrderManagementScreen({super.key});
@@ -635,6 +636,47 @@ class _OrderManagementScreenState extends State<OrderManagementScreen> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   mainAxisSize: MainAxisSize.min,
                   children: <Widget>[
+                    // Add Order Status widget at the top of dialog
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 16.0),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          SelectableText(
+                            'Order Status:',
+                            style: TextStyle(fontWeight: FontWeight.bold),
+                          ),
+                          const SizedBox(height: 8),
+                          // Add the OrderStatus widget
+                          Row(
+                            children: [
+                              Expanded(
+                                child: Container(
+                                  decoration: BoxDecoration(
+                                    borderRadius: BorderRadius.circular(4),
+                                  ),
+                                  child: OrderStatus(
+                                    order: displayOrder,
+                                    onOrderUpdate: (updatedOrder) {
+                                      // Handle order update in the dialog
+                                      _handleOrderModify(updatedOrder);
+                                      // Update the dialog state with the new order
+                                      dialogSetState(() {
+                                        // The displayOrder will be updated on the next build
+                                      });
+                                    },
+                                    onOrderSelect: _handleOrderSelect,
+                                    getStatusColor: _getStatusColor,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                          const Divider(height: 24),
+                        ],
+                      ),
+                    ),
+
                     if (isLoading)
                       Padding(
                         padding: const EdgeInsets.symmetric(vertical: 8.0),
@@ -666,7 +708,6 @@ class _OrderManagementScreenState extends State<OrderManagementScreen> {
                           'Details not available or not found.',
                         ),
                     ],
-                    _buildDetailRow('Status:', displayOrder.orderStatus),
                     _buildDetailRow(
                       'Total Amount:',
                       'LKR ${displayOrder.totalAmount.toStringAsFixed(2)}',
@@ -728,16 +769,6 @@ class _OrderManagementScreenState extends State<OrderManagementScreen> {
                             onPressed: () {
                               Navigator.of(context).pop();
                               _modifyOrder(displayOrder);
-                            },
-                          ),
-                          TextButton(
-                            style: TextButton.styleFrom(
-                              foregroundColor: Colors.red,
-                            ),
-                            child: const Text('Cancel Order'),
-                            onPressed: () {
-                              Navigator.of(context).pop();
-                              _cancelOrder(displayOrder);
                             },
                           ),
                         ],
@@ -946,6 +977,48 @@ class _OrderManagementScreenState extends State<OrderManagementScreen> {
     );
   }
 
+  // Method to handle status filter changes in mobile view
+  void _handleStatusFilterChange(String? newValue) {
+    setState(() {
+      _selectedStatusFilter = newValue;
+      _filterOrders(); // Re-filter orders based on new status
+    });
+  }
+
+  // Method to show order details on mobile
+  void _showMobileOrderDetails(BuildContext context, Order order) {
+    _handleOrderSelection(order); // Reuse existing selection logic first
+    _showOrderDetailsDialog(context, order); // Then show the dialog
+  }
+
+  // Method for OrderStatus widget to modify orders
+  void _handleOrderModify(Order order) {
+    // First update our local state
+    setState(() {
+      final index = _allOrders.indexWhere((o) => o.id == order.id);
+      if (index != -1) {
+        _allOrders[index] = order;
+      }
+
+      final filteredIndex = _filteredOrders.indexWhere((o) => o.id == order.id);
+      if (filteredIndex != -1) {
+        _filteredOrders[filteredIndex] = order;
+      }
+
+      if (_selectedOrder?.id == order.id) {
+        _selectedOrder = order;
+      }
+    });
+
+    // Then call the existing modify logic
+    _modifyOrder(order);
+  }
+
+  // Method for OrderStatus widget to select orders
+  void _handleOrderSelect(Order order) {
+    _handleOrderSelection(order); // Reuse existing selection logic
+  }
+
   @override
   Widget build(BuildContext context) {
     // Detect if we're on a desktop-sized screen
@@ -1034,14 +1107,12 @@ class _OrderManagementScreenState extends State<OrderManagementScreen> {
                       selectedStatusFilter: _selectedStatusFilter,
                       orderStatuses: _orderStatuses,
                       searchController: _searchController,
-                      onFilterChange: (String? newValue) {
-                        setState(() {
-                          _selectedStatusFilter = newValue;
-                          _filterOrders();
-                        });
-                      },
-                      onShowDetails: _showOrderDetailsDialog,
+                      onFilterChange: _handleStatusFilterChange,
+                      onShowDetails: _showMobileOrderDetails,
                       getStatusColor: _getStatusColor,
+                      // Add the missing required parameters
+                      onOrderUpdate: _handleOrderModify,
+                      onOrderSelect: _handleOrderSelect,
                     ),
           ),
         ],

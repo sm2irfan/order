@@ -1,10 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:order_management/models/order_model.dart';
 import 'package:file_picker/file_picker.dart';
-import 'dart:io';
-import 'package:path_provider/path_provider.dart' as path_provider;
-import 'package:flutter/foundation.dart' show kIsWeb, Platform;
-import 'package:order_management/utils/file_export_utils.dart'; // Add this import
+import 'package:order_management/utils/file_export_utils.dart';
+import 'package:order_management/services/order_status_history_service.dart';
+import 'package:order_management/screens/desktop_order_screen_component/order_status.dart'; // Add this import
 
 class DesktopOrderScreen extends StatefulWidget {
   final List<Order> allOrders;
@@ -678,27 +677,34 @@ class _DesktopOrderScreenState extends State<DesktopOrderScreen> {
 
           const SizedBox(height: 24),
 
-          // Actions
-          if (order.orderStatus == 'Order Placed' ||
-              order.orderStatus == 'Order Processing')
-            Row(
-              mainAxisAlignment: MainAxisAlignment.end,
-              children: [
-                OutlinedButton(
-                  onPressed: () => widget.onModifyOrder(order),
-                  child: const Text('Modify Order'),
+          // Actions section - Redesigned to match the image
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              // Modify Order Button - Full width
+              OutlinedButton(
+                onPressed: () => widget.onModifyOrder(order),
+                child: const Text('Modify Order'),
+                style: OutlinedButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(vertical: 12),
                 ),
-                const SizedBox(width: 16),
-                ElevatedButton(
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.red,
-                    foregroundColor: Colors.white,
+              ),
+              const SizedBox(height: 8),
+              // Status controls in a row
+              Row(
+                children: [
+                  Expanded(
+                    child: OrderStatus(
+                      order: order,
+                      onOrderUpdate: widget.onModifyOrder,
+                      onOrderSelect: widget.onOrderSelect,
+                      getStatusColor: widget.getStatusColor,
+                    ),
                   ),
-                  onPressed: () => widget.onCancelOrder(order),
-                  child: const Text('Cancel Order'),
-                ),
-              ],
-            ),
+                ],
+              ),
+            ],
+          ),
         ],
       ),
     );

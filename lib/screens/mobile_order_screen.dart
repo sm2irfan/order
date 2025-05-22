@@ -9,6 +9,8 @@ class MobileOrderScreen extends StatelessWidget {
   final Function(String?) onFilterChange;
   final Function(BuildContext, Order) onShowDetails;
   final Color Function(String) getStatusColor;
+  final Function(Order) onOrderUpdate;
+  final Function(Order) onOrderSelect;
 
   const MobileOrderScreen({
     super.key,
@@ -19,6 +21,8 @@ class MobileOrderScreen extends StatelessWidget {
     required this.onFilterChange,
     required this.onShowDetails,
     required this.getStatusColor,
+    required this.onOrderUpdate,
+    required this.onOrderSelect,
   });
 
   @override
@@ -76,28 +80,29 @@ class MobileOrderScreen extends StatelessWidget {
                         final order = filteredOrders[index];
                         return Card(
                           margin: const EdgeInsets.symmetric(vertical: 8.0),
-                          child: ListTile(
-                            leading: CircleAvatar(
-                              backgroundColor: getStatusColor(
-                                order.orderStatus,
-                              ),
-                              child: Icon(
-                                Icons.receipt_long,
-                                color: Colors.white,
-                              ),
-                            ),
-                            title: SelectableText(
-                              'Order ID: ${order.id}',
-                              style: const TextStyle(
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                            subtitle: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                const SizedBox(height: 4),
-                                Row(
+                          child: Column(
+                            children: [
+                              ListTile(
+                                leading: CircleAvatar(
+                                  backgroundColor: getStatusColor(
+                                    order.orderStatus,
+                                  ),
+                                  child: const Icon(
+                                    Icons.receipt_long,
+                                    color: Colors.white,
+                                  ),
+                                ),
+                                title: SelectableText(
+                                  'Order ID: ${order.id}',
+                                  style: const TextStyle(
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                                subtitle: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
+                                    const SizedBox(height: 4),
+                                    // Status indicator now just shows current status
                                     Container(
                                       padding: const EdgeInsets.symmetric(
                                         horizontal: 6,
@@ -117,32 +122,32 @@ class MobileOrderScreen extends StatelessWidget {
                                         ),
                                       ),
                                     ),
+                                    const SizedBox(height: 4),
+                                    SelectableText(
+                                      'Total: LKR ${order.totalAmount.toStringAsFixed(2)}',
+                                    ),
+                                    if (order.customerName != null)
+                                      SelectableText(
+                                        'Customer: ${order.customerName}',
+                                        style: TextStyle(
+                                          fontSize: 12,
+                                          color: Colors.grey[700],
+                                        ),
+                                      ),
+                                    SelectableText(
+                                      'Date: ${order.createdAt.day}/${order.createdAt.month}/${order.createdAt.year}',
+                                      style: TextStyle(
+                                        fontSize: 12,
+                                        color: Colors.grey[600],
+                                      ),
+                                    ),
                                   ],
                                 ),
-                                const SizedBox(height: 4),
-                                SelectableText(
-                                  'Total: LKR ${order.totalAmount.toStringAsFixed(2)}',
-                                ),
-                                if (order.customerName != null)
-                                  SelectableText(
-                                    'Customer: ${order.customerName}',
-                                    style: TextStyle(
-                                      fontSize: 12,
-                                      color: Colors.grey[700],
-                                    ),
-                                  ),
-                                SelectableText(
-                                  'Date: ${order.createdAt.day}/${order.createdAt.month}/${order.createdAt.year}',
-                                  style: TextStyle(
-                                    fontSize: 12,
-                                    color: Colors.grey[600],
-                                  ),
-                                ),
-                              ],
-                            ),
-                            trailing: const Icon(Icons.arrow_forward_ios),
-                            isThreeLine: true,
-                            onTap: () => onShowDetails(context, order),
+                                trailing: const Icon(Icons.arrow_forward_ios),
+                                isThreeLine: true,
+                                onTap: () => onShowDetails(context, order),
+                              ),
+                            ],
                           ),
                         );
                       },

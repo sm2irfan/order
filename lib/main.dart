@@ -91,6 +91,16 @@ class _AuthWrapperState extends State<AuthWrapper> {
       return const Scaffold(body: Center(child: CircularProgressIndicator()));
     }
 
+    print('DEBUG: User is authenticated: $_isAuthenticated');
+    // auth user name
+    final user = Supabase.instance.client.auth.currentUser;
+    if (user != null) {
+      print('DEBUG: User ID: ${user.id}');
+      print('DEBUG: User Email: ${user.email}');
+    } else {
+      print('DEBUG: No user is authenticated');
+    }
+
     if (_isAuthenticated) {
       return const OrderManagementScreen();
     } else {
