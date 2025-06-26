@@ -4,6 +4,8 @@ import 'package:file_picker/file_picker.dart';
 import 'package:order_management/utils/file_export_utils.dart';
 import 'package:order_management/services/order_status_history_service.dart';
 import 'package:order_management/screens/desktop_order_screen_component/order_status.dart'; // Add this import
+import 'package:process_run/shell.dart';
+import 'dart:io';
 
 class DesktopOrderScreen extends StatefulWidget {
   final List<Order> allOrders;
@@ -657,18 +659,29 @@ class _DesktopOrderScreenState extends State<DesktopOrderScreen> {
                   ),
                   const SizedBox(height: 16),
 
-                  // Add Save as Text File button
-                  Align(
-                    alignment: Alignment.centerLeft,
-                    child: ElevatedButton.icon(
-                      icon: const Icon(Icons.description),
-                      label: const Text('Save as Text File'),
-                      onPressed: () => _saveAsTextFile(order),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.blueGrey,
-                        foregroundColor: Colors.white,
+                  // Add Save as Text File and Print buttons
+                  Row(
+                    children: [
+                      ElevatedButton.icon(
+                        icon: const Icon(Icons.description),
+                        label: const Text('Save as Text File'),
+                        onPressed: () => _saveAsTextFile(order),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.blueGrey,
+                          foregroundColor: Colors.white,
+                        ),
                       ),
-                    ),
+                      const SizedBox(width: 12),
+                      ElevatedButton.icon(
+                        icon: const Icon(Icons.print),
+                        label: const Text('Print'),
+                        onPressed: () => _printOrder(order),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.green,
+                          foregroundColor: Colors.white,
+                        ),
+                      ),
+                    ],
                   ),
                 ],
               ),
@@ -756,5 +769,89 @@ class _DesktopOrderScreenState extends State<DesktopOrderScreen> {
       defaultSaveLocation: _defaultSaveLocation,
       onSetDefaultLocationRequested: _setDefaultSaveLocation,
     );
+  }
+
+  // Add a placeholder for the print method
+  void _printOrder(Order order) async {
+    try {
+      // First save the order as text file to get the file path
+      String? filePath = await OrderFileExport.saveOrderAsTextFile(
+        order: order,
+        context: context,
+        calculateSubtotal: widget.calculateSubtotal,
+        defaultSaveLocation: _defaultSaveLocation,
+        onSetDefaultLocationRequested: _setDefaultSaveLocation,
+      );
+
+      if (filePath != null) {
+        // Create PowerShell script content
+        String psScript = '''
+# Define paths
+\$sourceFile = "$filePath"
+\$tempFile = "\$env:TEMP\\print_temp.txt"
+
+# Read content from source file and trim whitespace
+\$content = Get-Content \$sourceFile | ForEach-Object { \$_.Trim() }
+\$content -join "`r`n" | Out-File -FilePath \$tempFile -Encoding utf8
+
+# Set default printer
+\$printerName = "EPSON TM-T81III Receipt"
+(New-Object -ComObject WScript.Network).SetDefaultPrinter(\$printerName)
+
+# Force close existing Notepad instances to apply new settings
+Get-Process notepad -ErrorAction SilentlyContinue | Stop-Process -Force
+
+# Configure Notepad settings via registry
+\$registryPath = "HKCU:\\Software\\Microsoft\\Notepad"
+
+# Set ZERO margins
+Set-ItemProperty -Path \$registryPath -Name "fSavePageSettings" -Value 1 -Force
+Set-ItemProperty -Path \$registryPath -Name "iMarginTop"    -Value 0 -Force
+Set-ItemProperty -Path \$registryPath -Name "iMarginBottom" -Value 0 -Force
+Set-ItemProperty -Path \$registryPath -Name "iMarginLeft"   -Value 0 -Force
+Set-ItemProperty -Path \$registryPath -Name "iMarginRight"  -Value 0 -Force
+
+# Set bold font with clearer visibility
+Set-ItemProperty -Path \$registryPath -Name "lfFaceName"    -Value "Courier New" -Force
+Set-ItemProperty -Path \$registryPath -Name "iPointSize"    -Value 80           -Force
+Set-ItemProperty -Path \$registryPath -Name "lfWeight"      -Value 700           -Force
+
+# Print using Notepad
+Start-Process -FilePath notepad.exe -ArgumentList "/p \$tempFile" -Wait
+
+# Cleanup
+Remove-Item \$tempFile -Force
+
+Write-Host "Printed with ZERO margins and BOLD text!"
+''';
+
+        // Save PowerShell script to temp file
+        final tempDir = Directory.systemTemp;
+        final scriptFile = File('${tempDir.path}\\print_order_${order.id}.ps1');
+        await scriptFile.writeAsString(psScript);
+
+        // Execute PowerShell script
+        var shell = Shell();
+        await shell.run(
+          'powershell.exe -ExecutionPolicy Bypass -File "${scriptFile.path}"',
+        );
+
+        // Cleanup script file
+        await scriptFile.delete();
+
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Order ${order.id} sent to printer')),
+          );
+        }
+      }
+    } catch (e) {
+      print('ERROR printing order: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Could not print order: $e')));
+      }
+    }
   }
 }

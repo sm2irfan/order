@@ -32,8 +32,11 @@ class OrderFileExport {
       // Prepare text content
       final StringBuffer buffer = StringBuffer();
 
-      // Header
-      buffer.writeln('====== ORDER RECEIPT ======');
+      // Header with Logo
+      buffer.writeln('              RosGrocer                   ');
+      buffer.writeln('          Fresh __ Quality __ Fast          ');
+
+      buffer.writeln('');
       buffer.writeln('Order ID: ${order.id}');
       // buffer.writeln(
       //   'Date: ${order.createdAt.day}/${order.createdAt.month}/${order.createdAt.year}',
@@ -55,44 +58,44 @@ class OrderFileExport {
       // buffer.writeln('');
 
       // Order details
-      buffer.writeln('ORDER DETAILS:');
-      buffer.writeln('Payment Method: ${order.paymentMethod}');
-      buffer.writeln('Delivery Option: ${order.deliveryOption}');
-      if (order.deliveryTimeSlot != null) {
-        buffer.writeln('Delivery Time: ${order.deliveryTimeSlot}');
-      }
+      // buffer.writeln('ORDER DETAILS:');
+      // buffer.writeln('Payment Method: ${order.paymentMethod}');
+      // buffer.writeln('Delivery Option: ${order.deliveryOption}');
+      // if (order.deliveryTimeSlot != null) {
+      //   buffer.writeln('Delivery Time: ${order.deliveryTimeSlot}');
+      // }
       buffer.writeln('');
 
       // Item table
       buffer.writeln('ITEMS:');
-      buffer.writeln('-'.padRight(60, '-'));
+      buffer.writeln('-'.padRight(43, '-'));
       buffer.writeln(
-        'Product'.padRight(30) +
-            'Qty'.padRight(10) +
-            'Unit'.padRight(10) +
+        'Product'.padRight(20) +
+            'Qty'.padRight(5) +
+            'Unit'.padRight(8) +
             'Price'.padRight(10),
       );
-      buffer.writeln('-'.padRight(60, '-'));
+      buffer.writeln('-'.padRight(43, '-'));
 
       for (var item in order.items) {
         buffer.writeln(
-          item.productName.padRight(30) +
-              item.quantity.toString().padRight(10) +
-              item.unit.padRight(10) +
-              '${item.price.toStringAsFixed(2)} Rs'.padRight(10),
+          item.productName.padRight(20) +
+              item.quantity.toString().padRight(5) +
+              item.unit.padRight(8) +
+              item.price.toStringAsFixed(2).padRight(10),
         );
       }
 
-      buffer.writeln('-'.padRight(60, '-'));
+      buffer.writeln('-'.padRight(43, '-'));
       buffer.writeln('');
 
       // Summary
-      buffer.writeln('SUMMARY:');
-      buffer.writeln(
-        'Subtotal: LKR ${calculateSubtotal(order).toStringAsFixed(2)}',
-      );
+      // buffer.writeln('SUMMARY:');
+      // buffer.writeln(
+      //   'Subtotal: LKR ${calculateSubtotal(order).toStringAsFixed(2)}',
+      // );
       buffer.writeln('Delivery Charge: 50 Rs');
-      buffer.writeln('Total: LKR ${order.totalAmount.toStringAsFixed(2)}');
+      buffer.writeln('Total: ${order.totalAmount.toStringAsFixed(2)} Rs');
       buffer.writeln('');
       buffer.writeln('Thank you for your order!');
 
