@@ -7,6 +7,7 @@ import 'package:order_management/services/auth_service.dart';
 import 'package:order_management/services/supabase_order_service.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:order_management/main.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 class OrderManagementScreen extends StatefulWidget {
   const OrderManagementScreen({super.key});
@@ -36,20 +37,223 @@ class _OrderManagementScreenState extends State<OrderManagementScreen> {
   bool _isLoading = false;
   final AuthService _authService = AuthService.instance;
 
+  // Real-time subscription for orders table
+  late final RealtimeChannel _ordersChannel;
+
   @override
   void initState() {
     super.initState();
     print('🚀 OrderManagementScreen initializing...');
     _loadOrdersFromSupabase();
     _searchController.addListener(_filterOrders);
+    _setupRealtimeSubscription();
     print('👂 Search controller listener added');
   }
 
   @override
   void dispose() {
     _searchController.dispose();
+    _ordersChannel.unsubscribe();
+    print('🔌 Real-time subscription cleaned up');
     super.dispose();
   }
+
+  /// Setup real-time subscription for orders table
+  void _setupRealtimeSubscription() {
+    print('🔄 Setting up real-time subscription for orders table...');
+
+    final supabase = Supabase.instance.client;
+
+    _ordersChannel =
+        supabase
+            .channel('orders_realtime')
+            .onPostgresChanges(
+              event: PostgresChangeEvent.all,
+              schema: 'public',
+              table: 'orders',
+              callback: _handleOrdersRealtimeChange,
+            )
+            .subscribe();
+
+    print('✅ Real-time subscription setup complete');
+  }
+
+  /// Handle real-time changes from orders table
+  void _handleOrdersRealtimeChange(PostgresChangePayload payload) {
+    print('🔔 Real-time change detected in orders table');
+    print('📋 Event type: ${payload.eventType}');
+    print('📋 Table: ${payload.table}');
+    print('📋 Schema: ${payload.schema}');
+
+    switch (payload.eventType) {
+      case PostgresChangeEvent.insert:
+        _handleNewOrder(payload);
+        break;
+      case PostgresChangeEvent.update:
+        _handleOrderUpdate(payload);
+        break;
+      case PostgresChangeEvent.delete:
+        _handleOrderDelete(payload);
+        break;
+      default:
+        print('🔍 Unknown event type: ${payload.eventType}');
+    }
+  }
+
+  /// Handle new order insertion
+  void _handleNewOrder(PostgresChangePayload payload) {
+    final newOrderData = payload.newRecord;
+    if (newOrderData['id'] != null) {
+      final orderId = newOrderData['id'] as String;
+      final orderStatus = newOrderData['order_status'] as String? ?? 'Unknown';
+      final totalAmount = newOrderData['total_amount'] as num? ?? 0.0;
+      final customerName = newOrderData['customer_name'] as String?;
+
+      // Enhanced logging
+      _logOrderChange(
+        changeType: 'INSERT',
+        orderId: orderId,
+        newStatus: orderStatus,
+        customerName: customerName,
+        totalAmount: totalAmount,
+        additionalData: {
+          'payment_method': newOrderData['payment_method'],
+          'delivery_option': newOrderData['delivery_option'],
+          'created_at': newOrderData['created_at'],
+        },
+      );
+
+      // Auto-refresh orders list without showing notification
+      if (mounted) {
+        _loadOrdersFromSupabase();
+      }
+    }
+  }
+
+  /// Handle order updates
+  void _handleOrderUpdate(PostgresChangePayload payload) {
+    final oldData = payload.oldRecord;
+    final newData = payload.newRecord;
+
+    if (newData['id'] != null) {
+      final orderId = newData['id'] as String;
+      final oldStatus = oldData['order_status'] as String? ?? 'Unknown';
+      final newStatus = newData['order_status'] as String? ?? 'Unknown';
+      final customerName = newData['customer_name'] as String?;
+
+      // Detect what changed
+      final changes = <String, dynamic>{};
+      oldData.forEach((key, oldValue) {
+        final newValue = newData[key];
+        if (oldValue != newValue) {
+          changes[key] = {'old': oldValue, 'new': newValue};
+        }
+      });
+
+      // Enhanced logging
+      _logOrderChange(
+        changeType: 'UPDATE',
+        orderId: orderId,
+        oldStatus: oldStatus,
+        newStatus: newStatus,
+        customerName: customerName,
+        totalAmount: newData['total_amount'] as num?,
+        additionalData: {
+          'changes_count': changes.length,
+          'changed_fields': changes.keys.toList(),
+          'all_changes': changes,
+        },
+      );
+
+      // Auto-refresh orders list without showing notification for status changes
+      if (oldStatus != newStatus && mounted) {
+        _loadOrdersFromSupabase();
+      }
+    }
+  }
+
+  /// Handle order deletions
+  void _handleOrderDelete(PostgresChangePayload payload) {
+    final deletedData = payload.oldRecord;
+    if (deletedData['id'] != null) {
+      final orderId = deletedData['id'] as String;
+      final orderStatus = deletedData['order_status'] as String? ?? 'Unknown';
+      final customerName = deletedData['customer_name'] as String?;
+
+      // Enhanced logging
+      _logOrderChange(
+        changeType: 'DELETE',
+        orderId: orderId,
+        oldStatus: orderStatus,
+        customerName: customerName,
+        totalAmount: deletedData['total_amount'] as num?,
+        additionalData: {
+          'deleted_at': DateTime.now().toIso8601String(),
+          'original_created_at': deletedData['created_at'],
+        },
+      );
+
+      // Auto-refresh orders list without showing notification for deletions
+      if (mounted) {
+        _loadOrdersFromSupabase();
+      }
+    }
+  }
+
+  /// Enhanced logging method for order changes
+  void _logOrderChange({
+    required String changeType,
+    required String orderId,
+    String? oldStatus,
+    String? newStatus,
+    String? customerName,
+    num? totalAmount,
+    Map<String, dynamic>? additionalData,
+  }) {
+    final timestamp = DateTime.now().toIso8601String();
+
+    // Console logging with enhanced formatting
+    print('📊 ================== ORDER CHANGE LOG ==================');
+    print('⏰ Timestamp: $timestamp');
+    print('🔄 Change Type: $changeType');
+    print('📦 Order ID: $orderId');
+    if (oldStatus != null) print('📋 Old Status: $oldStatus');
+    if (newStatus != null) print('📋 New Status: $newStatus');
+    if (customerName != null) print('👤 Customer: $customerName');
+    if (totalAmount != null)
+      print('💰 Amount: LKR ${totalAmount.toStringAsFixed(2)}');
+    if (additionalData != null && additionalData.isNotEmpty) {
+      print('📋 Additional Data:');
+      additionalData.forEach((key, value) {
+        print('   - $key: $value');
+      });
+    }
+    print('================================================== END LOG');
+
+    // Optional: Save to database by creating a log entry object
+    // final logEntry = {
+    //   'timestamp': timestamp,
+    //   'change_type': changeType,
+    //   'order_id': orderId,
+    //   'old_status': oldStatus,
+    //   'new_status': newStatus,
+    //   'customer_name': customerName,
+    //   'total_amount': totalAmount,
+    //   'additional_data': additionalData,
+    // };
+    // _saveLogToDatabase(logEntry);
+  }
+
+  /// Optional method to save logs to a database table
+  // Future<void> _saveLogToDatabase(Map<String, dynamic> logEntry) async {
+  //   try {
+  //     final supabase = Supabase.instance.client;
+  //     await supabase.from('order_change_logs').insert(logEntry);
+  //     print('✅ Log entry saved to database');
+  //   } catch (e) {
+  //     print('❌ Failed to save log entry: $e');
+  //   }
+  // }
 
   /// Load orders directly from Supabase function
   Future<void> _loadOrdersFromSupabase() async {
@@ -324,6 +528,44 @@ class _OrderManagementScreenState extends State<OrderManagementScreen> {
     return order.items.fold(0.0, (sum, item) => sum + (item.discount ?? 0));
   }
 
+  // Method to make phone calls
+  Future<void> _makePhoneCall(String phoneNumber) async {
+    print('📞 Attempting to make call to: $phoneNumber');
+
+    // Clean the phone number (remove spaces, dashes, etc.)
+    final cleanedNumber = phoneNumber.replaceAll(RegExp(r'[^\d+]'), '');
+    print('📞 Cleaned number: $cleanedNumber');
+
+    final Uri phoneUri = Uri(scheme: 'tel', path: cleanedNumber);
+
+    try {
+      if (await canLaunchUrl(phoneUri)) {
+        await launchUrl(phoneUri);
+        print('✅ Phone call initiated successfully');
+      } else {
+        print('❌ Cannot launch phone dialer');
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Unable to make phone call from this device'),
+              duration: Duration(seconds: 3),
+            ),
+          );
+        }
+      }
+    } catch (e) {
+      print('💥 Error making phone call: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to make phone call: $e'),
+            duration: const Duration(seconds: 3),
+          ),
+        );
+      }
+    }
+  }
+
   Widget _buildDetailRow(String label, String value) {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 4.0),
@@ -334,10 +576,56 @@ class _OrderManagementScreenState extends State<OrderManagementScreen> {
             width: 120,
             child: SelectableText(
               label,
-              style: const TextStyle(fontWeight: FontWeight.w500),
+              style: const TextStyle(
+                fontWeight: FontWeight.w500,
+                fontSize: 16, // Increased font size
+              ),
             ),
           ),
-          Expanded(child: SelectableText(value)),
+          Expanded(
+            child: SelectableText(
+              value,
+              style: const TextStyle(
+                fontSize: 16, // Increased font size
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // Method to build a clickable phone number row
+  Widget _buildPhoneRow(String label, String phoneNumber) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4.0),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SizedBox(
+            width: 120,
+            child: SelectableText(
+              label,
+              style: const TextStyle(
+                fontWeight: FontWeight.w500,
+                fontSize: 16, // Increased font size
+              ),
+            ),
+          ),
+          Expanded(
+            child: GestureDetector(
+              onTap: () => _makePhoneCall(phoneNumber),
+              child: Text(
+                phoneNumber,
+                style: const TextStyle(
+                  fontSize: 16, // Increased font size
+                  color: Colors.blue,
+                  decoration: TextDecoration.underline,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+            ),
+          ),
         ],
       ),
     );
@@ -358,7 +646,13 @@ class _OrderManagementScreenState extends State<OrderManagementScreen> {
       context: context,
       builder:
           (BuildContext context) => AlertDialog(
-            title: SelectableText('Order Details: ${order.id}'),
+            title: SelectableText(
+              'Order Details: ${order.id}',
+              style: const TextStyle(
+                fontSize: 20, // Increased font size
+                fontWeight: FontWeight.bold,
+              ),
+            ),
             content: SingleChildScrollView(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -372,7 +666,7 @@ class _OrderManagementScreenState extends State<OrderManagementScreen> {
                   if (order.customerName != null)
                     _buildDetailRow('Customer:', order.customerName!),
                   if (order.customerPhoneNumber != null)
-                    _buildDetailRow('Phone:', order.customerPhoneNumber!),
+                    _buildPhoneRow('Phone:', order.customerPhoneNumber!),
                   _buildDetailRow('Payment:', order.paymentMethod),
                   _buildDetailRow('Delivery:', order.deliveryOption),
                   if (order.deliveryTimeSlot != null)
@@ -386,7 +680,10 @@ class _OrderManagementScreenState extends State<OrderManagementScreen> {
                   const SizedBox(height: 16),
                   const SelectableText(
                     'Items:',
-                    style: TextStyle(fontWeight: FontWeight.bold),
+                    style: TextStyle(
+                      fontWeight: FontWeight.bold,
+                      fontSize: 18, // Increased font size
+                    ),
                   ),
                   const SizedBox(height: 8),
                   ...order.items.map((item) {
@@ -412,12 +709,24 @@ class _OrderManagementScreenState extends State<OrderManagementScreen> {
                                 item.productImageUrl != null
                                     ? TextDecoration.underline
                                     : null,
+                            fontSize: 16, // Increased font size
+                            fontWeight: FontWeight.w600,
                           ),
                         ),
                         subtitle: Text(
                           '${item.quantity} ${item.unit} @ LKR ${unitPrice.toStringAsFixed(2)} each',
+                          style: const TextStyle(
+                            fontSize: 14, // Increased font size
+                            fontWeight: FontWeight.w500,
+                          ),
                         ),
-                        trailing: Text('LKR ${totalPrice.toStringAsFixed(2)}'),
+                        trailing: Text(
+                          'LKR ${totalPrice.toStringAsFixed(2)}',
+                          style: const TextStyle(
+                            fontSize: 16, // Increased font size
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
                       ),
                     );
                   }),
@@ -426,7 +735,13 @@ class _OrderManagementScreenState extends State<OrderManagementScreen> {
             ),
             actions: [
               TextButton(
-                child: const Text('Close'),
+                child: const Text(
+                  'Close',
+                  style: TextStyle(
+                    fontSize: 16, // Increased font size
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
                 onPressed: () => Navigator.of(context).pop(),
               ),
             ],
@@ -533,7 +848,7 @@ class _OrderManagementScreenState extends State<OrderManagementScreen> {
                   const Text(
                     'Tap image to view full screen',
                     style: TextStyle(
-                      fontSize: 12,
+                      fontSize: 14, // Increased from 12
                       color: Colors.grey,
                       fontStyle: FontStyle.italic,
                     ),
@@ -732,6 +1047,7 @@ class _OrderManagementScreenState extends State<OrderManagementScreen> {
                       calculateSubtotal: _calculateSubtotal,
                       calculateDiscount: _calculateTotalDiscount,
                       buildDetailRow: _buildDetailRow,
+                      onPhoneNumberTap: _makePhoneCall,
                     )
                     : MobileOrderScreen(
                       filteredOrders: _filteredOrders,

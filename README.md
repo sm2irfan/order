@@ -25,3 +25,8 @@ flutter run -d linux
 ## build in linux
 
 flutter build linux
+
+
+## build flutter for mobile app 
+
+flutter build apk --release

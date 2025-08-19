@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:order_management/models/order_model.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:order_management/utils/file_export_utils.dart';
-import 'package:order_management/services/order_status_history_service.dart';
 import 'package:order_management/screens/desktop_order_screen_component/order_status.dart'; // Add this import
 import 'package:process_run/shell.dart';
 import 'dart:io';
@@ -22,6 +21,7 @@ class DesktopOrderScreen extends StatefulWidget {
   final double Function(Order) calculateSubtotal;
   final double Function(Order) calculateDiscount;
   final Widget Function(String, String) buildDetailRow;
+  final Function(String)? onPhoneNumberTap;
 
   const DesktopOrderScreen({
     super.key,
@@ -39,6 +39,7 @@ class DesktopOrderScreen extends StatefulWidget {
     required this.calculateSubtotal,
     required this.calculateDiscount,
     required this.buildDetailRow,
+    this.onPhoneNumberTap,
   });
 
   @override
@@ -49,6 +50,46 @@ class _DesktopOrderScreenState extends State<DesktopOrderScreen> {
   bool _isPanelOpenedByClick = false;
   // Add a variable to store the default save location
   String? _defaultSaveLocation = '/home/irfan/Desktop/daily-log/order_item';
+
+  // Method to build a clickable phone number row
+  Widget _buildPhoneRow(String label, String phoneNumber) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4.0),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SizedBox(
+            width: 120,
+            child: SelectableText(
+              label,
+              style: const TextStyle(
+                fontWeight: FontWeight.w500,
+                fontSize: 16, // Increased font size
+              ),
+            ),
+          ),
+          Expanded(
+            child: GestureDetector(
+              onTap: () {
+                if (widget.onPhoneNumberTap != null) {
+                  widget.onPhoneNumberTap!(phoneNumber);
+                }
+              },
+              child: Text(
+                phoneNumber,
+                style: const TextStyle(
+                  fontSize: 16, // Increased font size
+                  color: Colors.blue,
+                  decoration: TextDecoration.underline,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 
   @override
   void didUpdateWidget(covariant DesktopOrderScreen oldWidget) {
@@ -564,7 +605,7 @@ class _DesktopOrderScreenState extends State<DesktopOrderScreen> {
               if (order.customerName != null)
                 widget.buildDetailRow('Name', order.customerName!),
               if (order.customerPhoneNumber != null)
-                widget.buildDetailRow('Phone', order.customerPhoneNumber!),
+                _buildPhoneRow('Phone', order.customerPhoneNumber!),
               if (order.customerName == null &&
                   order.customerPhoneNumber == null &&
                   order.userId != null)
@@ -638,28 +679,40 @@ class _DesktopOrderScreenState extends State<DesktopOrderScreen> {
                         flex: 2, // Reduced from 3
                         child: SelectableText(
                           'Product',
-                          style: TextStyle(fontWeight: FontWeight.bold),
+                          style: TextStyle(
+                            fontWeight: FontWeight.bold,
+                            fontSize: 16, // Increased font size
+                          ),
                         ),
                       ),
                       Expanded(
                         flex: 1,
                         child: SelectableText(
                           'Qty',
-                          style: TextStyle(fontWeight: FontWeight.bold),
+                          style: TextStyle(
+                            fontWeight: FontWeight.bold,
+                            fontSize: 16, // Increased font size
+                          ),
                         ),
                       ),
                       Expanded(
                         flex: 1,
                         child: SelectableText(
                           'Unit',
-                          style: TextStyle(fontWeight: FontWeight.bold),
+                          style: TextStyle(
+                            fontWeight: FontWeight.bold,
+                            fontSize: 16, // Increased font size
+                          ),
                         ),
                       ),
                       Expanded(
                         flex: 1, // Reduced from 2
                         child: SelectableText(
                           'Price',
-                          style: TextStyle(fontWeight: FontWeight.bold),
+                          style: TextStyle(
+                            fontWeight: FontWeight.bold,
+                            fontSize: 16, // Increased font size
+                          ),
                         ),
                       ),
                     ],
@@ -688,22 +741,38 @@ class _DesktopOrderScreenState extends State<DesktopOrderScreen> {
                                           item.productImageUrl != null
                                               ? TextDecoration.underline
                                               : null,
+                                      fontSize: 15, // Increased font size
+                                      fontWeight: FontWeight.w500,
                                     ),
                                   ),
                                 ),
                               ),
                               Expanded(
                                 flex: 1,
-                                child: SelectableText('${item.quantity}'),
+                                child: SelectableText(
+                                  '${item.quantity}',
+                                  style: const TextStyle(
+                                    fontSize: 15, // Increased font size
+                                  ),
+                                ),
                               ),
                               Expanded(
                                 flex: 1,
-                                child: SelectableText(item.unit),
+                                child: SelectableText(
+                                  item.unit,
+                                  style: const TextStyle(
+                                    fontSize: 15, // Increased font size
+                                  ),
+                                ),
                               ),
                               Expanded(
                                 flex: 1, // Reduced from 2
                                 child: SelectableText(
                                   '${item.price.toStringAsFixed(0)} Rs',
+                                  style: const TextStyle(
+                                    fontSize: 15, // Increased font size
+                                    fontWeight: FontWeight.w600,
+                                  ),
                                 ),
                               ),
                             ],
@@ -736,13 +805,23 @@ class _DesktopOrderScreenState extends State<DesktopOrderScreen> {
                       const Spacer(flex: 5),
                       const Expanded(
                         flex: 2,
-                        child: SelectableText('Delivery charge:'),
+                        child: SelectableText(
+                          'Delivery charge:',
+                          style: TextStyle(
+                            fontSize: 15, // Increased font size
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
                       ),
                       Expanded(
                         flex: 2,
                         child: SelectableText(
                           '50 Rs',
-                          style: const TextStyle(color: Colors.red),
+                          style: const TextStyle(
+                            color: Colors.red,
+                            fontSize: 15, // Increased font size
+                            fontWeight: FontWeight.w600,
+                          ),
                         ),
                       ),
                     ],
@@ -757,14 +836,20 @@ class _DesktopOrderScreenState extends State<DesktopOrderScreen> {
                         flex: 2,
                         child: SelectableText(
                           'Total:',
-                          style: TextStyle(fontWeight: FontWeight.bold),
+                          style: TextStyle(
+                            fontWeight: FontWeight.bold,
+                            fontSize: 16, // Increased font size
+                          ),
                         ),
                       ),
                       Expanded(
                         flex: 2,
                         child: SelectableText(
                           'Rs ${order.totalAmount.toStringAsFixed(2)}',
-                          style: const TextStyle(fontWeight: FontWeight.bold),
+                          style: const TextStyle(
+                            fontWeight: FontWeight.bold,
+                            fontSize: 16, // Increased font size
+                          ),
                         ),
                       ),
                     ],

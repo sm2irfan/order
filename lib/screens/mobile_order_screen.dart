@@ -39,8 +39,14 @@ class MobileOrderScreen extends StatelessWidget {
               Expanded(
                 child: TextField(
                   controller: searchController,
+                  style: const TextStyle(
+                    fontSize: 16,
+                  ), // Added larger font size
                   decoration: InputDecoration(
                     labelText: 'Search by Order ID',
+                    labelStyle: const TextStyle(
+                      fontSize: 16,
+                    ), // Added larger label font
                     prefixIcon: const Icon(Icons.search),
                     border: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(8.0),
@@ -53,7 +59,11 @@ class MobileOrderScreen extends StatelessWidget {
                 value: selectedStatusFilter,
                 icon: const Icon(Icons.filter_list),
                 elevation: 16,
-                style: TextStyle(color: Theme.of(context).primaryColor),
+                style: TextStyle(
+                  color: Theme.of(context).primaryColor,
+                  fontSize: 16, // Increased from default
+                  fontWeight: FontWeight.w500,
+                ),
                 underline: Container(
                   height: 2,
                   color: Theme.of(context).primaryColorDark,
@@ -63,7 +73,13 @@ class MobileOrderScreen extends StatelessWidget {
                     orderStatuses.map<DropdownMenuItem<String>>((String value) {
                       return DropdownMenuItem<String>(
                         value: value,
-                        child: SelectableText(value),
+                        child: SelectableText(
+                          value,
+                          style: const TextStyle(
+                            fontSize: 16, // Added larger font size
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
                       );
                     }).toList(),
               ),
@@ -75,7 +91,16 @@ class MobileOrderScreen extends StatelessWidget {
           Expanded(
             child:
                 filteredOrders.isEmpty
-                    ? const Center(child: SelectableText('No orders found.'))
+                    ? const Center(
+                      child: SelectableText(
+                        'No orders found.',
+                        style: TextStyle(
+                          fontSize: 18, // Added larger font size
+                          fontWeight: FontWeight.w500,
+                          color: Colors.grey,
+                        ),
+                      ),
+                    )
                     : ListView.builder(
                       itemCount: filteredOrders.length,
                       itemBuilder: (context, index) {
@@ -98,6 +123,7 @@ class MobileOrderScreen extends StatelessWidget {
                                   'Order ID: ${order.id}',
                                   style: const TextStyle(
                                     fontWeight: FontWeight.bold,
+                                    fontSize: 18, // Increased from default
                                   ),
                                 ),
                                 subtitle: Column(
@@ -124,7 +150,8 @@ class MobileOrderScreen extends StatelessWidget {
                                             order.orderStatus,
                                             style: const TextStyle(
                                               color: Colors.white,
-                                              fontSize: 12,
+                                              fontSize: 14, // Increased from 12
+                                              fontWeight: FontWeight.w500,
                                             ),
                                           ),
                                         ),
@@ -158,7 +185,9 @@ class MobileOrderScreen extends StatelessWidget {
                                                   'Change',
                                                   style: TextStyle(
                                                     color: Colors.white,
-                                                    fontSize: 10,
+                                                    fontSize:
+                                                        14, // Increased from 12
+                                                    fontWeight: FontWeight.w500,
                                                   ),
                                                 ),
                                               ],
@@ -170,20 +199,26 @@ class MobileOrderScreen extends StatelessWidget {
                                     const SizedBox(height: 4),
                                     SelectableText(
                                       'Total: LKR ${order.totalAmount.toStringAsFixed(2)}',
+                                      style: const TextStyle(
+                                        fontSize: 16, // Increased from default
+                                        fontWeight: FontWeight.w600,
+                                      ),
                                     ),
                                     if (order.customerName != null)
                                       SelectableText(
                                         'Customer: ${order.customerName}',
                                         style: TextStyle(
-                                          fontSize: 12,
+                                          fontSize: 14, // Increased from 12
                                           color: Colors.grey[700],
+                                          fontWeight: FontWeight.w500,
                                         ),
                                       ),
                                     SelectableText(
                                       'Date: ${order.createdAt.day}/${order.createdAt.month}/${order.createdAt.year}',
                                       style: TextStyle(
-                                        fontSize: 12,
+                                        fontSize: 14, // Increased from 12
                                         color: Colors.grey[600],
+                                        fontWeight: FontWeight.w500,
                                       ),
                                     ),
                                   ],
@@ -209,16 +244,40 @@ class MobileOrderScreen extends StatelessWidget {
       context: context,
       builder:
           (BuildContext context) => AlertDialog(
-            title: Text('Change Order Status'),
+            title: const Text(
+              'Change Order Status',
+              style: TextStyle(
+                fontSize: 20, // Increased font size
+                fontWeight: FontWeight.bold,
+              ),
+            ),
             content: Column(
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text('Order ID: ${order.id}'),
+                Text(
+                  'Order ID: ${order.id}',
+                  style: const TextStyle(
+                    fontSize: 16, // Increased font size
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
                 const SizedBox(height: 8),
-                Text('Current Status: ${order.orderStatus}'),
+                Text(
+                  'Current Status: ${order.orderStatus}',
+                  style: const TextStyle(
+                    fontSize: 16, // Increased font size
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
                 const SizedBox(height: 16),
-                const Text('Select New Status:'),
+                const Text(
+                  'Select New Status:',
+                  style: TextStyle(
+                    fontSize: 16, // Increased font size
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
                 const SizedBox(height: 8),
                 ...orderStatuses
                     .where(
@@ -237,7 +296,13 @@ class MobileOrderScreen extends StatelessWidget {
                             size: 16,
                           ),
                         ),
-                        title: Text(status),
+                        title: Text(
+                          status,
+                          style: const TextStyle(
+                            fontSize: 16, // Increased font size
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
                         onTap: () {
                           Navigator.of(context).pop();
                           _confirmStatusChange(context, order, status);
@@ -249,7 +314,13 @@ class MobileOrderScreen extends StatelessWidget {
             actions: [
               TextButton(
                 onPressed: () => Navigator.of(context).pop(),
-                child: const Text('Cancel'),
+                child: const Text(
+                  'Cancel',
+                  style: TextStyle(
+                    fontSize: 16, // Increased font size
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
               ),
             ],
           ),
@@ -266,14 +337,30 @@ class MobileOrderScreen extends StatelessWidget {
       context: context,
       builder:
           (BuildContext context) => AlertDialog(
-            title: const Text('Confirm Status Change'),
+            title: const Text(
+              'Confirm Status Change',
+              style: TextStyle(
+                fontSize: 20, // Increased font size
+                fontWeight: FontWeight.bold,
+              ),
+            ),
             content: Text(
               'Are you sure you want to change the status of Order ${order.id} from "${order.orderStatus}" to "$newStatus"?',
+              style: const TextStyle(
+                fontSize: 16, // Increased font size
+                fontWeight: FontWeight.w500,
+              ),
             ),
             actions: [
               TextButton(
                 onPressed: () => Navigator.of(context).pop(),
-                child: const Text('Cancel'),
+                child: const Text(
+                  'Cancel',
+                  style: TextStyle(
+                    fontSize: 16, // Increased font size
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
               ),
               ElevatedButton(
                 onPressed: () {
@@ -290,7 +377,13 @@ class MobileOrderScreen extends StatelessWidget {
                     );
                   }
                 },
-                child: const Text('Confirm'),
+                child: const Text(
+                  'Confirm',
+                  style: TextStyle(
+                    fontSize: 16, // Increased font size
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
               ),
             ],
           ),
