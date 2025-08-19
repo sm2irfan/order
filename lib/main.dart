@@ -2,6 +2,7 @@
 import 'package:flutter/material.dart';
 import 'package:order_management/screens/login_screen.dart';
 import 'package:order_management/order_management_screen.dart';
+import 'package:order_management/services/ringtone_service.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 void main() async {
@@ -14,6 +15,9 @@ void main() async {
     anonKey:
         'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImxoeXRhaXJnbm9qcHpnYmdqaG9kIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDE1MDI4MjYsImV4cCI6MjA1NzA3ODgyNn0.uDxpy6lcB4STumSknuDmrjwZDuSekcY4i1A07nHCQdM',
   );
+
+  // Initialize RingtoneService
+  await RingtoneService.initialize();
 
   runApp(const MyApp());
 }

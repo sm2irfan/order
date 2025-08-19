@@ -133,29 +133,32 @@ class MobileOrderScreen extends StatelessWidget {
                                     // Status indicator now shows current status with change button
                                     Row(
                                       children: [
-                                        Container(
-                                          padding: const EdgeInsets.symmetric(
-                                            horizontal: 6,
-                                            vertical: 2,
-                                          ),
-                                          decoration: BoxDecoration(
-                                            color: getStatusColor(
+                                        Expanded(
+                                          child: Container(
+                                            padding: const EdgeInsets.symmetric(
+                                              horizontal: 6,
+                                              vertical: 2,
+                                            ),
+                                            decoration: BoxDecoration(
+                                              color: getStatusColor(
+                                                order.orderStatus,
+                                              ),
+                                              borderRadius:
+                                                  BorderRadius.circular(12),
+                                            ),
+                                            child: SelectableText(
                                               order.orderStatus,
-                                            ),
-                                            borderRadius: BorderRadius.circular(
-                                              12,
-                                            ),
-                                          ),
-                                          child: SelectableText(
-                                            order.orderStatus,
-                                            style: const TextStyle(
-                                              color: Colors.white,
-                                              fontSize: 14, // Increased from 12
-                                              fontWeight: FontWeight.w500,
+                                              style: const TextStyle(
+                                                color: Colors.white,
+                                                fontSize: 12, // Reduced from 14
+                                                fontWeight: FontWeight.w500,
+                                              ),
                                             ),
                                           ),
                                         ),
-                                        const SizedBox(width: 8),
+                                        const SizedBox(
+                                          width: 4,
+                                        ), // Reduced from 8
                                         GestureDetector(
                                           onTap:
                                               () => _showStatusChangeDialog(
@@ -164,7 +167,7 @@ class MobileOrderScreen extends StatelessWidget {
                                               ),
                                           child: Container(
                                             padding: const EdgeInsets.symmetric(
-                                              horizontal: 6,
+                                              horizontal: 4, // Reduced from 6
                                               vertical: 2,
                                             ),
                                             decoration: BoxDecoration(
@@ -178,15 +181,15 @@ class MobileOrderScreen extends StatelessWidget {
                                                 Icon(
                                                   Icons.edit,
                                                   color: Colors.white,
-                                                  size: 12,
+                                                  size: 10, // Reduced from 12
                                                 ),
                                                 SizedBox(width: 2),
                                                 Text(
-                                                  'Change',
+                                                  'Edit', // Shortened from 'Change'
                                                   style: TextStyle(
                                                     color: Colors.white,
                                                     fontSize:
-                                                        14, // Increased from 12
+                                                        12, // Reduced from 14
                                                     fontWeight: FontWeight.w500,
                                                   ),
                                                 ),

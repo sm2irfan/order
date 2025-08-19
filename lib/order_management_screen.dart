@@ -5,6 +5,7 @@ import 'package:order_management/screens/desktop_order_screen.dart';
 import 'package:order_management/screens/mobile_order_screen.dart';
 import 'package:order_management/services/auth_service.dart';
 import 'package:order_management/services/supabase_order_service.dart';
+import 'package:order_management/widgets/ringtone_toggle_widget.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:order_management/main.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -989,6 +990,12 @@ class _OrderManagementScreenState extends State<OrderManagementScreen> {
         foregroundColor: Colors.white,
         actions: [
           IconButton(
+            icon: const Icon(Icons.notifications_active),
+            tooltip: 'Ringtone Settings',
+            onPressed: _showRingtoneDialog,
+          ),
+          const SizedBox(width: 8),
+          IconButton(
             icon: const Icon(Icons.refresh),
             tooltip: 'Refresh Orders',
             onPressed: _loadOrdersFromSupabase,
@@ -1064,6 +1071,13 @@ class _OrderManagementScreenState extends State<OrderManagementScreen> {
           ),
         ],
       ),
+    );
+  }
+
+  void _showRingtoneDialog() {
+    showDialog(
+      context: context,
+      builder: (BuildContext context) => const RingtoneDialog(),
     );
   }
 }
