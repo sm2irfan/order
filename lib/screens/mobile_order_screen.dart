@@ -11,6 +11,7 @@ class MobileOrderScreen extends StatelessWidget {
   final Color Function(String) getStatusColor;
   final Function(Order) onOrderUpdate;
   final Function(Order) onOrderSelect;
+  final Function(Order, String)? onStatusChange;
 
   const MobileOrderScreen({
     super.key,
@@ -23,6 +24,7 @@ class MobileOrderScreen extends StatelessWidget {
     required this.getStatusColor,
     required this.onOrderUpdate,
     required this.onOrderSelect,
+    this.onStatusChange,
   });
 
   @override
@@ -102,25 +104,68 @@ class MobileOrderScreen extends StatelessWidget {
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
                                     const SizedBox(height: 4),
-                                    // Status indicator now just shows current status
-                                    Container(
-                                      padding: const EdgeInsets.symmetric(
-                                        horizontal: 6,
-                                        vertical: 2,
-                                      ),
-                                      decoration: BoxDecoration(
-                                        color: getStatusColor(
-                                          order.orderStatus,
+                                    // Status indicator now shows current status with change button
+                                    Row(
+                                      children: [
+                                        Container(
+                                          padding: const EdgeInsets.symmetric(
+                                            horizontal: 6,
+                                            vertical: 2,
+                                          ),
+                                          decoration: BoxDecoration(
+                                            color: getStatusColor(
+                                              order.orderStatus,
+                                            ),
+                                            borderRadius: BorderRadius.circular(
+                                              12,
+                                            ),
+                                          ),
+                                          child: SelectableText(
+                                            order.orderStatus,
+                                            style: const TextStyle(
+                                              color: Colors.white,
+                                              fontSize: 12,
+                                            ),
+                                          ),
                                         ),
-                                        borderRadius: BorderRadius.circular(12),
-                                      ),
-                                      child: SelectableText(
-                                        order.orderStatus,
-                                        style: const TextStyle(
-                                          color: Colors.white,
-                                          fontSize: 12,
+                                        const SizedBox(width: 8),
+                                        GestureDetector(
+                                          onTap:
+                                              () => _showStatusChangeDialog(
+                                                context,
+                                                order,
+                                              ),
+                                          child: Container(
+                                            padding: const EdgeInsets.symmetric(
+                                              horizontal: 6,
+                                              vertical: 2,
+                                            ),
+                                            decoration: BoxDecoration(
+                                              color: Colors.blue,
+                                              borderRadius:
+                                                  BorderRadius.circular(12),
+                                            ),
+                                            child: const Row(
+                                              mainAxisSize: MainAxisSize.min,
+                                              children: [
+                                                Icon(
+                                                  Icons.edit,
+                                                  color: Colors.white,
+                                                  size: 12,
+                                                ),
+                                                SizedBox(width: 2),
+                                                Text(
+                                                  'Change',
+                                                  style: TextStyle(
+                                                    color: Colors.white,
+                                                    fontSize: 10,
+                                                  ),
+                                                ),
+                                              ],
+                                            ),
+                                          ),
                                         ),
-                                      ),
+                                      ],
                                     ),
                                     const SizedBox(height: 4),
                                     SelectableText(
@@ -155,6 +200,100 @@ class MobileOrderScreen extends StatelessWidget {
           ),
         ],
       ),
+    );
+  }
+
+  // Method to show status change dialog
+  void _showStatusChangeDialog(BuildContext context, Order order) {
+    showDialog(
+      context: context,
+      builder:
+          (BuildContext context) => AlertDialog(
+            title: Text('Change Order Status'),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('Order ID: ${order.id}'),
+                const SizedBox(height: 8),
+                Text('Current Status: ${order.orderStatus}'),
+                const SizedBox(height: 16),
+                const Text('Select New Status:'),
+                const SizedBox(height: 8),
+                ...orderStatuses
+                    .where(
+                      (status) =>
+                          status != 'All' && status != order.orderStatus,
+                    )
+                    .map(
+                      (status) => ListTile(
+                        dense: true,
+                        leading: CircleAvatar(
+                          backgroundColor: getStatusColor(status),
+                          radius: 12,
+                          child: const Icon(
+                            Icons.circle,
+                            color: Colors.white,
+                            size: 16,
+                          ),
+                        ),
+                        title: Text(status),
+                        onTap: () {
+                          Navigator.of(context).pop();
+                          _confirmStatusChange(context, order, status);
+                        },
+                      ),
+                    ),
+              ],
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(context).pop(),
+                child: const Text('Cancel'),
+              ),
+            ],
+          ),
+    );
+  }
+
+  // Method to confirm status change
+  void _confirmStatusChange(
+    BuildContext context,
+    Order order,
+    String newStatus,
+  ) {
+    showDialog(
+      context: context,
+      builder:
+          (BuildContext context) => AlertDialog(
+            title: const Text('Confirm Status Change'),
+            content: Text(
+              'Are you sure you want to change the status of Order ${order.id} from "${order.orderStatus}" to "$newStatus"?',
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(context).pop(),
+                child: const Text('Cancel'),
+              ),
+              ElevatedButton(
+                onPressed: () {
+                  Navigator.of(context).pop();
+                  if (onStatusChange != null) {
+                    onStatusChange!(order, newStatus);
+                  } else {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text(
+                          'Status change functionality not implemented yet',
+                        ),
+                      ),
+                    );
+                  }
+                },
+                child: const Text('Confirm'),
+              ),
+            ],
+          ),
     );
   }
 }

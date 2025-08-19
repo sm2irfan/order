@@ -185,6 +185,115 @@ class _OrderManagementScreenState extends State<OrderManagementScreen> {
     ).showSnackBar(SnackBar(content: Text('Cancel order feature coming soon')));
   }
 
+  // Method to handle order status changes
+  void _handleStatusChange(Order order, String newStatus) async {
+    print(
+      '🔄 Changing order ${order.id} status from "${order.orderStatus}" to "$newStatus"',
+    );
+
+    try {
+      // Show loading indicator
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Row(
+            children: [
+              SizedBox(
+                width: 20,
+                height: 20,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2,
+                  valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                ),
+              ),
+              SizedBox(width: 16),
+              Text('Updating order status...'),
+            ],
+          ),
+          duration: Duration(seconds: 3),
+        ),
+      );
+
+      // Update status via Supabase service
+      final service = SupabaseOrderService();
+      final success = await service.updateOrderStatus(order.id, newStatus);
+
+      if (success) {
+        // Update the order locally after successful database update
+        final updatedOrder = Order(
+          id: order.id,
+          orderStatus: newStatus,
+          createdAt: order.createdAt,
+          totalAmount: order.totalAmount,
+          paymentMethod: order.paymentMethod,
+          deliveryOption: order.deliveryOption,
+          deliveryTimeSlot: order.deliveryTimeSlot,
+          deliveryAddress: order.deliveryAddress,
+          customerName: order.customerName,
+          customerPhoneNumber: order.customerPhoneNumber,
+          items: order.items,
+        );
+
+        // Update the order in the list
+        setState(() {
+          final index = _allOrders.indexWhere((o) => o.id == order.id);
+          if (index != -1) {
+            _allOrders[index] = updatedOrder;
+            _filterOrders(); // Refresh the filtered list
+          }
+        });
+
+        // Show success message
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('✅ Order ${order.id} status updated to "$newStatus"'),
+            backgroundColor: Colors.green,
+            duration: const Duration(seconds: 3),
+          ),
+        );
+
+        print('✅ Order status updated successfully in database and UI');
+      } else {
+        throw Exception('Service returned failure');
+      }
+    } catch (e) {
+      print('❌ Error updating order status: $e');
+
+      // Check if it's an authentication error
+      if (e.toString().contains('Authentication') ||
+          e.toString().contains('not authenticated') ||
+          e.toString().contains('Invalid JWT')) {
+        print('🔐 Authentication error detected during status update');
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('❌ Session expired. Please login again.'),
+            backgroundColor: Colors.red,
+            duration: Duration(seconds: 5),
+          ),
+        );
+
+        // Navigate to login
+        await Supabase.instance.client.auth.signOut();
+        if (mounted) {
+          Navigator.of(context).pushAndRemoveUntil(
+            MaterialPageRoute(builder: (context) => const AuthWrapper()),
+            (route) => false,
+          );
+        }
+        return;
+      }
+
+      // Show generic error message
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('❌ Failed to update order status: ${e.toString()}'),
+          backgroundColor: Colors.red,
+          duration: const Duration(seconds: 5),
+        ),
+      );
+    }
+  }
+
   Color _getStatusColor(String status) {
     switch (status) {
       case 'Order Placed':
@@ -634,6 +743,7 @@ class _OrderManagementScreenState extends State<OrderManagementScreen> {
                       getStatusColor: _getStatusColor,
                       onOrderUpdate: _modifyOrder,
                       onOrderSelect: _handleOrderSelection,
+                      onStatusChange: _handleStatusChange,
                     ),
           ),
         ],

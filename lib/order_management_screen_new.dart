@@ -56,7 +56,8 @@ class _OrderManagementScreenState extends State<OrderManagementScreen> {
     });
 
     try {
-      final List<Order> orders = await SupabaseOrderService.fetchOrders();
+      final service = SupabaseOrderService();
+      final List<Order> orders = await service.fetchOrders();
 
       if (mounted) {
         setState(() {

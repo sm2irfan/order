@@ -319,4 +319,78 @@ class SupabaseOrderService {
     _productImagesCache.clear();
     print('🧹 Product names and images cache cleared');
   }
+
+  /// Update order status and create history record
+  Future<bool> updateOrderStatus(String orderId, String newStatus) async {
+    print('🔄 Updating order $orderId status to: $newStatus');
+
+    try {
+      final supabase = Supabase.instance.client;
+      final user = supabase.auth.currentUser;
+
+      if (user == null) {
+        print('❌ No authenticated user found');
+        throw Exception('User not authenticated');
+      }
+
+      print('👤 Current user: ${user.id}');
+
+      // Start a transaction-like operation
+      // First, update the order status in the orders table
+      print('📝 Updating orders table...');
+      await supabase
+          .from('orders')
+          .update({'order_status': newStatus})
+          .eq('id', orderId);
+
+      print('✅ Order status updated in orders table');
+
+      // Then, create a record in the orders_status_history table
+      print('📊 Creating status history record...');
+      final historyData = {
+        'order_id': orderId,
+        'order_status': newStatus,
+        'updated_by_id': user.id,
+        'updated_by_name': user.email?.split('@').first ?? 'Unknown User',
+        'created_at': DateTime.now().toUtc().toIso8601String(),
+      };
+
+      print('📋 History data: $historyData');
+
+      await supabase.from('orders_status_history').insert(historyData);
+
+      print('✅ Status history record created successfully');
+      print('🎉 Order status update completed for order: $orderId');
+
+      return true;
+    } catch (e) {
+      print('❌ Error updating order status: $e');
+      throw Exception('Failed to update order status: $e');
+    }
+  }
+
+  /// Get order status history for a specific order
+  Future<List<Map<String, dynamic>>> getOrderStatusHistory(
+    String orderId,
+  ) async {
+    print('📋 Fetching status history for order: $orderId');
+
+    try {
+      final supabase = Supabase.instance.client;
+
+      final response = await supabase
+          .from('orders_status_history')
+          .select('*')
+          .eq('order_id', orderId)
+          .order('created_at', ascending: false);
+
+      print(
+        '📊 Found ${response.length} status history records for order $orderId',
+      );
+      return List<Map<String, dynamic>>.from(response);
+    } catch (e) {
+      print('❌ Error fetching order status history: $e');
+      throw Exception('Failed to fetch status history: $e');
+    }
+  }
 }
