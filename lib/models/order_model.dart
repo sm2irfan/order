@@ -35,6 +35,7 @@ class Order {
 class OrderDetail {
   final int productId;
   final String productName;
+  final String? productImageUrl;
   final int quantity;
   final String unit;
   final int? discount;
@@ -43,11 +44,16 @@ class OrderDetail {
   OrderDetail({
     required this.productId,
     required this.productName,
+    this.productImageUrl,
     required this.quantity,
     required this.unit,
     this.discount,
     required this.price,
   });
 
-  double get itemTotal => quantity * price - (discount ?? 0);
+  // Since API returns total price in 'price' field, itemTotal just subtracts discount
+  double get itemTotal => price - (discount ?? 0);
+
+  // Calculate unit price from total price and quantity
+  double get unitPrice => price / quantity;
 }

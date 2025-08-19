@@ -2,24 +2,11 @@
 import 'package:flutter/material.dart';
 import 'package:order_management/screens/login_screen.dart';
 import 'package:order_management/order_management_screen.dart';
-import 'package:order_management/database/database_helper.dart';
-import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
-import 'dart:io';
-import 'package:order_management/services/supabase_realtime_service.dart';
 
 void main() async {
   // Ensure Flutter bindings are initialized
   WidgetsFlutterBinding.ensureInitialized();
-
-  // Initialize FFI for SQLite on desktop platforms
-  if (Platform.isLinux || Platform.isWindows || Platform.isMacOS) {
-    // Initialize FFI
-    sqfliteFfiInit();
-    // Change the default factory
-    databaseFactory = databaseFactoryFfi;
-    print('Using FFI SQLite implementation');
-  }
 
   // Initialize Supabase
   await Supabase.initialize(
@@ -27,14 +14,6 @@ void main() async {
     anonKey:
         'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImxoeXRhaXJnbm9qcHpnYmdqaG9kIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDE1MDI4MjYsImV4cCI6MjA1NzA3ODgyNn0.uDxpy6lcB4STumSknuDmrjwZDuSekcY4i1A07nHCQdM',
   );
-
-  // Initialize the database
-  await DatabaseHelper.instance.database;
-
-  // Initialize and subscribe to real-time updates
-  final supabaseClient = Supabase.instance.client;
-  final realtimeService = SupabaseRealtimeService(supabaseClient);
-  realtimeService.subscribeToOrdersTable();
 
   runApp(const MyApp());
 }
@@ -76,11 +55,45 @@ class _AuthWrapperState extends State<AuthWrapper> {
   Future<void> _checkSession() async {
     final supabase = Supabase.instance.client;
 
+    try {
+      // Try to refresh the session first
+      final response = await supabase.auth.refreshSession();
+
+      if (response.session != null) {
+        print('✅ Session refreshed successfully');
+        setState(() {
+          _isAuthenticated = true;
+          _isLoading = false;
+        });
+        return;
+      }
+    } catch (e) {
+      print('⚠️ Session refresh failed: $e');
+    }
+
     // Check if we already have a session
     final session = supabase.auth.currentSession;
 
+    if (session != null) {
+      // Validate the session by checking if it's expired
+      final expiresAt = session.expiresAt;
+      final now = DateTime.now().millisecondsSinceEpoch / 1000;
+
+      if (expiresAt != null && expiresAt > now) {
+        print('✅ Valid session found');
+        setState(() {
+          _isAuthenticated = true;
+          _isLoading = false;
+        });
+        return;
+      } else {
+        print('⚠️ Session expired');
+      }
+    }
+
+    print('❌ No valid session found');
     setState(() {
-      _isAuthenticated = session != null;
+      _isAuthenticated = false;
       _isLoading = false;
     });
   }

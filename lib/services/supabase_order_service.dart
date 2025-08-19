@@ -1,0 +1,322 @@
+import 'dart:convert';
+import 'package:http/http.dart' as http;
+import 'package:order_management/models/order_model.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
+
+class SupabaseOrderService {
+  static const String _baseUrl =
+      'https://lhytairgnojpzgbgjhod.supabase.co/functions/v1';
+
+  // Cache for product names to avoid repeated database calls
+  static Map<int, String> _productNamesCache = {};
+  // Cache for product images
+  static Map<int, String> _productImagesCache = {};
+
+  /// Fetch product names and images from pre_all_products table
+  static Future<Map<int, String>> fetchProductNames() async {
+    print(
+      '🛍️ Fetching product names and images from pre_all_products table...',
+    );
+
+    try {
+      final supabase = Supabase.instance.client;
+
+      final response = await supabase
+          .from('pre_all_products')
+          .select('id, name, image')
+          .eq('production', true); // Only get products that are in production
+
+      print('📦 Fetched ${response.length} products from database');
+
+      final Map<int, String> productNames = {};
+      final Map<int, String> productImages = {};
+
+      for (final product in response) {
+        final id = product['id'] as int;
+        final name = product['name'] as String?;
+        final image = product['image'] as String?;
+
+        if (name != null && name.isNotEmpty) {
+          // Extract only the English name (before hyphen)
+          final englishName = name.split(' - ').first.trim();
+          productNames[id] = englishName;
+        }
+
+        if (image != null && image.isNotEmpty) {
+          productImages[id] = image;
+        }
+      }
+
+      // Cache the results
+      _productNamesCache = productNames;
+      _productImagesCache = productImages;
+      print(
+        '✅ Cached ${productNames.length} product names and ${productImages.length} product images',
+      );
+
+      return productNames;
+    } catch (e) {
+      print('💥 Error fetching product names: $e');
+      // Return empty map on error, will fall back to basic mapping
+      return {};
+    }
+  }
+
+  /// Fetch all orders from Supabase function
+  Future<List<Order>> fetchOrders() async {
+    print('🔄 Starting to fetch orders from Supabase function...');
+
+    try {
+      // Get the current user's access token
+      final supabase = Supabase.instance.client;
+      final session = supabase.auth.currentSession;
+
+      if (session == null) {
+        print('❌ No active session found');
+        throw Exception('User not authenticated');
+      }
+
+      // Check if session is expired
+      final expiresAt = session.expiresAt;
+      final now = DateTime.now().millisecondsSinceEpoch / 1000;
+
+      if (expiresAt != null && expiresAt <= now) {
+        print('⏰ Session expired, attempting to refresh...');
+        try {
+          final refreshResponse = await supabase.auth.refreshSession();
+          if (refreshResponse.session == null) {
+            print('❌ Failed to refresh session');
+            throw Exception('Session expired and refresh failed');
+          }
+          print('✅ Session refreshed successfully');
+        } catch (e) {
+          print('💥 Error refreshing session: $e');
+          throw Exception('Authentication failed: $e');
+        }
+      }
+
+      final accessToken = supabase.auth.currentSession?.accessToken;
+      if (accessToken == null) {
+        throw Exception('No access token available');
+      }
+
+      print('� Using access token: ${accessToken.substring(0, 20)}...');
+
+      print('�📡 Making HTTP GET request to: $_baseUrl/get-auth-user-order');
+
+      final response = await http.get(
+        Uri.parse('$_baseUrl/get-auth-user-order'),
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $accessToken',
+        },
+      );
+
+      print('📊 Response status code: ${response.statusCode}');
+      print('📦 Response body length: ${response.body.length} characters');
+
+      if (response.statusCode == 401) {
+        print('🔐 Authentication failed - redirecting to login');
+        // Clear any cached session
+        await supabase.auth.signOut();
+        throw Exception('Authentication expired. Please login again.');
+      }
+
+      if (response.statusCode == 200) {
+        print('✅ Successfully received response from Supabase');
+
+        final Map<String, dynamic> responseData = json.decode(response.body);
+        print('🔍 Parsed response data keys: ${responseData.keys.toList()}');
+
+        final List<dynamic> ordersJson = responseData['orders'] ?? [];
+        print('📋 Found ${ordersJson.length} orders in response');
+
+        if (ordersJson.isNotEmpty) {
+          print('🔎 First order sample: ${ordersJson.first}');
+        }
+
+        // Fetch product names before parsing orders
+        if (_productNamesCache.isEmpty) {
+          print('🔄 Product cache empty, fetching product names...');
+          await fetchProductNames();
+        }
+
+        final List<Order> parsedOrders =
+            ordersJson.map((orderJson) {
+              final order = _parseOrderFromJson(orderJson);
+              print(
+                '✨ Parsed order: ID=${order.id}, Status=${order.orderStatus}, Items=${order.items.length}',
+              );
+              return order;
+            }).toList();
+
+        print('🎉 Successfully parsed ${parsedOrders.length} orders');
+        return parsedOrders;
+      } else {
+        print('❌ HTTP Error: ${response.statusCode}');
+        print('📄 Error response body: ${response.body}');
+        throw Exception(
+          'Failed to fetch orders: ${response.statusCode} - ${response.body}',
+        );
+      }
+    } catch (e) {
+      print('💥 Error fetching orders from Supabase: $e');
+      print('🔧 Error type: ${e.runtimeType}');
+      throw Exception('Failed to fetch orders: $e');
+    }
+  }
+
+  /// Parse order from JSON response
+  Order _parseOrderFromJson(Map<String, dynamic> json) {
+    try {
+      print('🔄 Parsing order: ${json['id']}');
+
+      // Parse order items
+      final List<OrderDetail> items = [];
+      if (json['items'] != null && json['items'] is List) {
+        print('📦 Found ${json['items'].length} items for order ${json['id']}');
+
+        for (var itemJson in json['items']) {
+          final item = _parseOrderDetailFromJson(itemJson, this);
+          items.add(item);
+          print(
+            '  ➕ Added item: ${item.productName} x${item.quantity} @ ${item.price}',
+          );
+        }
+      } else {
+        print('⚠️  No items found for order ${json['id']}');
+      }
+
+      // Parse customer profile
+      String? customerName;
+      String? customerPhoneNumber;
+      if (json['profile'] != null) {
+        final profile = json['profile'] as Map<String, dynamic>;
+        customerName = profile['full_name'] as String?;
+        customerPhoneNumber = profile['phone_number'] as String?;
+        print('👤 Customer: $customerName ($customerPhoneNumber)');
+      } else {
+        print('⚠️  No profile found for order ${json['id']}');
+      }
+
+      // Parse created_at date
+      DateTime createdAt;
+      try {
+        createdAt = DateTime.parse(json['created_at'] as String);
+        print('📅 Order date: ${createdAt.toString()}');
+      } catch (e) {
+        createdAt = DateTime.now();
+        print('⚠️  Failed to parse created_at for order ${json['id']}: $e');
+      }
+
+      final order = Order(
+        id: json['id'] as String,
+        userId: json['user_id'] as String?,
+        customerName: customerName,
+        customerPhoneNumber: customerPhoneNumber,
+        totalAmount: (json['total_amount'] as num).toDouble(),
+        deliveryOption: json['delivery_option'] as String,
+        deliveryAddress: json['delivery_address'] as String?,
+        deliveryTimeSlot: json['delivery_time_slot'] as String?,
+        paymentMethod: json['payment_method'] as String,
+        orderStatus: json['order_status'] as String,
+        createdAt: createdAt,
+        deliveryPartnerName: json['delivery_partner_name'] as String?,
+        deliveryPartnerPhone: json['delivery_partner_phone'] as String?,
+        items: items,
+      );
+
+      print(
+        '✅ Successfully parsed order ${order.id}: ${order.orderStatus}, Total: ${order.totalAmount}',
+      );
+      return order;
+    } catch (e) {
+      print('💥 Error parsing order from JSON: $e');
+      print('📄 JSON data: $json');
+      rethrow;
+    }
+  }
+
+  /// Parse order detail from JSON response
+  static OrderDetail _parseOrderDetailFromJson(
+    Map<String, dynamic> json,
+    SupabaseOrderService service,
+  ) {
+    try {
+      final int productId = json['product_id'] as int;
+      final String productName = service.getProductName(productId);
+      final String? productImageUrl = service.getProductImage(productId);
+      final int quantity = json['quantity'] as int;
+      final String unit = json['unit'] as String;
+      final int? discount = json['discount'] as int?;
+      final double price = (json['price'] as num).toDouble();
+
+      // Calculate unit price for logging
+      final unitPrice = price / quantity;
+
+      print(
+        '    🛍️  Product $productId: $productName, $quantity $unit @ $unitPrice each (Total: $price)',
+      );
+
+      return OrderDetail(
+        productId: productId,
+        productName: productName,
+        productImageUrl: productImageUrl,
+        quantity: quantity,
+        unit: unit,
+        discount: discount,
+        price: price,
+      );
+    } catch (e) {
+      print('💥 Error parsing order detail from JSON: $e');
+      print('📄 Detail JSON: $json');
+      rethrow;
+    }
+  }
+
+  /// Get product name from cache or fallback to basic mapping
+  String getProductName(int productId) {
+    // First check the cache from database
+    if (_productNamesCache.containsKey(productId)) {
+      final cachedName = _productNamesCache[productId]!;
+      final displayName = '[$productId] $cachedName';
+      print('DEBUG: Found cached product name for ID $productId: $displayName');
+      return displayName;
+    }
+
+    print(
+      'DEBUG: No cached product name found for ID $productId, using fallback',
+    );
+    // Fallback to basic mapping for commonly known products
+    final Map<int, String> fallbackNames = {
+      661: 'Coconut Oil',
+      611: 'Rice',
+      212: 'Tea',
+      123: 'Fish',
+      601: 'Sugar',
+      1: 'Onions',
+    };
+
+    final fallbackName = fallbackNames[productId] ?? 'Product $productId';
+    return '[$productId] $fallbackName';
+  }
+
+  /// Get product image URL from cache
+  String? getProductImage(int productId) {
+    if (_productImagesCache.containsKey(productId)) {
+      final imageUrl = _productImagesCache[productId]!;
+      print('DEBUG: Found cached product image for ID $productId: $imageUrl');
+      return imageUrl;
+    }
+
+    print('DEBUG: No cached product image found for ID $productId');
+    return null;
+  }
+
+  /// Clear the product names and images cache to force refresh
+  static void clearProductCache() {
+    _productNamesCache.clear();
+    _productImagesCache.clear();
+    print('🧹 Product names and images cache cleared');
+  }
+}

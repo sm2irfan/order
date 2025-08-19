@@ -105,6 +105,103 @@ class _DesktopOrderScreenState extends State<DesktopOrderScreen> {
     }
   }
 
+  // Method to show product image dialog
+  void _showProductImage(BuildContext context, OrderDetail item) {
+    if (item.productImageUrl == null || item.productImageUrl!.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('No image available for this product'),
+          duration: Duration(seconds: 2),
+        ),
+      );
+      return;
+    }
+
+    showDialog(
+      context: context,
+      builder:
+          (BuildContext context) => Dialog(
+            child: Container(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    item.productName,
+                    style: const TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                    ),
+                    textAlign: TextAlign.center,
+                  ),
+                  const SizedBox(height: 16),
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(8),
+                    child: Image.network(
+                      item.productImageUrl!,
+                      fit: BoxFit.contain,
+                      height: 400,
+                      width: 400,
+                      loadingBuilder: (context, child, loadingProgress) {
+                        if (loadingProgress == null) return child;
+                        return SizedBox(
+                          height: 400,
+                          width: 400,
+                          child: Center(
+                            child: CircularProgressIndicator(
+                              value:
+                                  loadingProgress.expectedTotalBytes != null
+                                      ? loadingProgress.cumulativeBytesLoaded /
+                                          loadingProgress.expectedTotalBytes!
+                                      : null,
+                            ),
+                          ),
+                        );
+                      },
+                      errorBuilder: (context, error, stackTrace) {
+                        return Container(
+                          height: 400,
+                          width: 400,
+                          decoration: BoxDecoration(
+                            color: Colors.grey[200],
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: const Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Icon(
+                                Icons.broken_image,
+                                size: 64,
+                                color: Colors.grey,
+                              ),
+                              SizedBox(height: 8),
+                              Text(
+                                'Failed to load image',
+                                style: TextStyle(color: Colors.grey),
+                              ),
+                            ],
+                          ),
+                        );
+                      },
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                    children: [
+                      TextButton(
+                        onPressed: () => Navigator.of(context).pop(),
+                        child: const Text('Close'),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Row(
@@ -578,7 +675,22 @@ class _DesktopOrderScreenState extends State<DesktopOrderScreen> {
                             children: [
                               Expanded(
                                 flex: 2, // Reduced from 3
-                                child: SelectableText(item.productName),
+                                child: GestureDetector(
+                                  onTap: () => _showProductImage(context, item),
+                                  child: SelectableText(
+                                    item.productName,
+                                    style: TextStyle(
+                                      color:
+                                          item.productImageUrl != null
+                                              ? Colors.blue
+                                              : null,
+                                      decoration:
+                                          item.productImageUrl != null
+                                              ? TextDecoration.underline
+                                              : null,
+                                    ),
+                                  ),
+                                ),
                               ),
                               Expanded(
                                 flex: 1,
