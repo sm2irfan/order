@@ -198,10 +198,13 @@ class _OrderManagementScreenState extends State<OrderManagementScreen> {
         },
       );
 
-      // 🔔 Automatically enable ringtone for new order
+      // 🔔 Automatically enable ringtone for new order with immediate sound
       try {
-        await RingtoneService.enableRingtone();
-        print('🔔 New order detected - ringtone automatically enabled');
+        await RingtoneService.enableRingtone(); // This now plays immediate sound
+        print('🔔 New order detected - ringtone automatically enabled with immediate sound');
+        
+        // Also trigger immediate background check
+        await BackgroundOrderMonitor.checkNow();
       } catch (e) {
         print('❌ Error enabling ringtone for new order: $e');
       }

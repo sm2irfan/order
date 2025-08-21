@@ -20,7 +20,7 @@ class BackgroundOrderMonitor {
       return;
     }
 
-    print('🚀 Starting background order monitoring...');
+    print('🚀 Starting enhanced background order monitoring...');
 
     // Initialize with current state
     await _initializeState();
@@ -30,12 +30,15 @@ class BackgroundOrderMonitor {
     await prefs.setBool(_isMonitoringKey, true);
     _isMonitoring = true;
 
-    // Start periodic checking every 30 seconds
-    _backgroundTimer = Timer.periodic(const Duration(seconds: 30), (_) async {
+    // Start periodic checking every 15 seconds (faster response)
+    _backgroundTimer = Timer.periodic(const Duration(seconds: 15), (_) async {
       await _checkForNewOrders();
     });
 
-    print('✅ Background order monitoring started (checking every 30 seconds)');
+    // Also do an immediate check
+    await _checkForNewOrders();
+
+    print('✅ Enhanced background monitoring started (checking every 15 seconds)');
   }
 
   /// Stop background monitoring
@@ -233,10 +236,27 @@ class BackgroundOrderMonitor {
     };
   }
 
-  /// Manually trigger a check for new orders (useful for testing)
+  /// Force immediate check for new orders (called from real-time events)
   static Future<void> checkNow() async {
-    print('🔍 Manual check for new orders triggered...');
+    print('🚨 IMMEDIATE order check triggered by real-time event');
     await _checkForNewOrders();
+  }
+
+  /// Set monitoring interval dynamically
+  static Future<void> setMonitoringInterval(Duration interval) async {
+    if (_isMonitoring && _backgroundTimer != null) {
+      print('⏰ Changing monitoring interval to ${interval.inSeconds} seconds');
+
+      // Cancel existing timer
+      _backgroundTimer?.cancel();
+
+      // Create new timer with updated interval
+      _backgroundTimer = Timer.periodic(interval, (_) async {
+        await _checkForNewOrders();
+      });
+
+      print('✅ Monitoring interval updated');
+    }
   }
 
   /// Update the known state when orders are refreshed in the UI
