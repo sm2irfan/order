@@ -6,6 +6,7 @@ import 'package:order_management/screens/mobile_order_screen.dart';
 import 'package:order_management/services/auth_service.dart';
 import 'package:order_management/services/background_order_monitor.dart';
 import 'package:order_management/services/ringtone_service.dart';
+import 'package:order_management/services/network_optimization_service.dart';
 import 'package:order_management/services/supabase_order_service.dart';
 import 'package:order_management/widgets/ringtone_toggle_widget.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -19,7 +20,8 @@ class OrderManagementScreen extends StatefulWidget {
   State<OrderManagementScreen> createState() => _OrderManagementScreenState();
 }
 
-class _OrderManagementScreenState extends State<OrderManagementScreen> {
+class _OrderManagementScreenState extends State<OrderManagementScreen>
+    with WidgetsBindingObserver {
   final TextEditingController _searchController = TextEditingController();
   String? _selectedStatusFilter = 'All';
   List<Order> _allOrders = [];
@@ -46,6 +48,10 @@ class _OrderManagementScreenState extends State<OrderManagementScreen> {
   @override
   void initState() {
     super.initState();
+
+    // Add app lifecycle observer for dynamic monitoring
+    WidgetsBinding.instance.addObserver(this);
+
     print('🚀 OrderManagementScreen initializing...');
     _loadOrdersFromSupabase();
     _searchController.addListener(_filterOrders);
@@ -62,6 +68,9 @@ class _OrderManagementScreenState extends State<OrderManagementScreen> {
     _searchController.dispose();
     _ordersChannel.unsubscribe();
 
+    // Remove app lifecycle observer
+    WidgetsBinding.instance.removeObserver(this);
+
     // 🛑 Stop background monitoring when screen is disposed
     _stopBackgroundMonitoring();
 
@@ -69,12 +78,55 @@ class _OrderManagementScreenState extends State<OrderManagementScreen> {
     super.dispose();
   }
 
+  /// Handle app lifecycle changes for dynamic monitoring
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    super.didChangeAppLifecycleState(state);
+
+    switch (state) {
+      case AppLifecycleState.paused:
+        print('📱 App backgrounded - enhancing monitoring frequency');
+        // Increase monitoring frequency when app is backgrounded
+        BackgroundOrderMonitor.setMonitoringInterval(
+          const Duration(seconds: 10),
+        );
+        break;
+
+      case AppLifecycleState.resumed:
+        print('📱 App resumed - normalizing monitoring');
+        // Restore normal monitoring when app is active
+        BackgroundOrderMonitor.setMonitoringInterval(
+          const Duration(seconds: 15),
+        );
+        // Immediately check for new orders that might have arrived
+        BackgroundOrderMonitor.checkNow();
+        // Also refresh the UI
+        _loadOrdersFromSupabase();
+        break;
+
+      case AppLifecycleState.detached:
+        print('📱 App detached - keeping background monitoring active');
+        break;
+
+      case AppLifecycleState.inactive:
+        print('📱 App inactive - maintaining current monitoring');
+        break;
+
+      case AppLifecycleState.hidden:
+        print('📱 App hidden - optimizing for background');
+        break;
+    }
+  }
+
   /// Initialize background order monitoring
   Future<void> _initializeBackgroundMonitoring() async {
     try {
       print('🚀 Initializing background order monitoring...');
 
-      // Restore previous state if any
+      // Initialize network optimization for faster responses
+      await NetworkOptimizationService.startNetworkOptimization();
+
+      // Restore previous state and start monitoring
       await BackgroundOrderMonitor.restoreState();
 
       // Start monitoring if not already running
@@ -153,25 +205,37 @@ class _OrderManagementScreenState extends State<OrderManagementScreen> {
     print('✅ Real-time subscription setup complete');
   }
 
-  /// Handle real-time changes from orders table
-  void _handleOrdersRealtimeChange(PostgresChangePayload payload) {
-    print('🔔 Real-time change detected in orders table');
-    print('📋 Event type: ${payload.eventType}');
-    print('📋 Table: ${payload.table}');
-    print('📋 Schema: ${payload.schema}');
+  /// Handle real-time changes in orders table with performance monitoring
+  Future<void> _handleOrdersRealtimeChange(
+    PostgresChangePayload payload,
+  ) async {
+    final startTime = DateTime.now(); // Track response time
 
-    switch (payload.eventType) {
-      case PostgresChangeEvent.insert:
-        _handleNewOrder(payload);
-        break;
-      case PostgresChangeEvent.update:
-        _handleOrderUpdate(payload);
-        break;
-      case PostgresChangeEvent.delete:
-        _handleOrderDelete(payload);
-        break;
-      default:
-        print('🔍 Unknown event type: ${payload.eventType}');
+    try {
+      print(
+        '� Real-time event: ${payload.eventType} - ${payload.newRecord?['id']}',
+      );
+
+      switch (payload.eventType) {
+        case PostgresChangeEvent.insert:
+          _handleNewOrder(payload);
+          break;
+        case PostgresChangeEvent.update:
+          _handleOrderUpdate(payload);
+          break;
+        case PostgresChangeEvent.delete:
+          _handleOrderDelete(payload);
+          break;
+        case PostgresChangeEvent.all:
+          print('❓ Received ALL event type - ignoring');
+          break;
+      }
+
+      // Monitor performance
+      _monitorPerformance('Real-time Event Processing', startTime);
+    } catch (e) {
+      print('❌ Error handling real-time change: $e');
+      _monitorPerformance('Real-time Event ERROR', startTime);
     }
   }
 
@@ -198,13 +262,23 @@ class _OrderManagementScreenState extends State<OrderManagementScreen> {
         },
       );
 
-      // 🔔 Automatically enable ringtone for new order with immediate sound
+      // 🔔 IMMEDIATE RESPONSE: Play ringtone with maximum priority
       try {
-        await RingtoneService.enableRingtone(); // This now plays immediate sound
-        print('🔔 New order detected - ringtone automatically enabled with immediate sound');
-        
-        // Also trigger immediate background check
+        // Use immediate ringtone for instant response
+        await RingtoneService.playRingtoneImmediate();
+        print('🚨 INSTANT ringtone played for new order');
+
+        // Enable continuous ringtone
+        await RingtoneService.enableRingtone();
+        print(
+          '🔔 New order detected - ringtone automatically enabled with immediate sound',
+        );
+
+        // Force immediate background check to sync state
         await BackgroundOrderMonitor.checkNow();
+
+        // Optimize network for faster subsequent requests
+        await NetworkOptimizationService.optimizeNow();
       } catch (e) {
         print('❌ Error enabling ringtone for new order: $e');
       }
@@ -1069,6 +1143,25 @@ class _OrderManagementScreenState extends State<OrderManagementScreen> {
             ),
           ),
     );
+  }
+
+  /// Monitor performance and response times
+  void _monitorPerformance(String operation, DateTime startTime) {
+    final duration = DateTime.now().difference(startTime);
+    final milliseconds = duration.inMilliseconds;
+
+    if (milliseconds > 1000) {
+      print('⚠️ SLOW $operation: ${milliseconds}ms (>1s)');
+    } else if (milliseconds > 500) {
+      print('🟡 $operation: ${milliseconds}ms (>500ms)');
+    } else {
+      print('✅ FAST $operation: ${milliseconds}ms');
+    }
+
+    // Log performance for optimization
+    if (milliseconds > 2000) {
+      print('🚨 CRITICAL DELAY detected in $operation - consider optimization');
+    }
   }
 
   @override

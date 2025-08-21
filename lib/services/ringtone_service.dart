@@ -46,7 +46,8 @@ class RingtoneService {
             isSpeakerphoneOn: false,
             stayAwake: true, // Keep device awake for audio
             contentType: AndroidContentType.sonification,
-            usageType: AndroidUsageType.notificationRingtone, // Specific for ringtones
+            usageType:
+                AndroidUsageType.notificationRingtone, // Specific for ringtones
             audioFocus: AndroidAudioFocus.gain, // Request full audio focus
           ),
           iOS: AudioContextIOS(category: AVAudioSessionCategory.ambient),
@@ -56,9 +57,12 @@ class RingtoneService {
       // Pre-load the audio file to eliminate loading delay
       await _audioPlayer.setSource(AssetSource('sounds/notification.mp3'));
       await _audioPlayer.setVolume(1.0); // Maximum volume
-      
+
+      // Pre-warm the audio player by seeking to start
+      await _audioPlayer.seek(Duration.zero);
+
       _isAudioPreloaded = true;
-      print('🎵 Audio pre-loaded successfully - ready for instant playback');
+      print('🎵 Audio pre-loaded and pre-warmed - ready for instant playback');
     } catch (e) {
       print('❌ Error pre-loading audio: $e');
       _isAudioPreloaded = false;
@@ -138,7 +142,7 @@ class RingtoneService {
     } else {
       print('🔔 Ringtone already enabled');
     }
-    
+
     // Always play immediate ringtone for new orders (no delay)
     await playRingtoneImmediate();
   }
@@ -146,7 +150,39 @@ class RingtoneService {
   /// Play ringtone immediately without waiting for timer
   static Future<void> playRingtoneImmediate() async {
     print('🚨 Playing IMMEDIATE ringtone for urgent notification');
+
+    // Ensure audio session is ready for immediate playback
+    await _ensureAudioSessionReady();
+
+    // Play with highest priority
     await playRingtone();
+  }
+
+  /// Ensure audio session is ready for immediate playback
+  static Future<void> _ensureAudioSessionReady() async {
+    try {
+      // Re-configure audio context for maximum responsiveness
+      await _audioPlayer.setAudioContext(
+        AudioContext(
+          android: AudioContextAndroid(
+            isSpeakerphoneOn: false,
+            stayAwake: true,
+            contentType: AndroidContentType.sonification,
+            usageType: AndroidUsageType.notificationRingtone,
+            audioFocus:
+                AndroidAudioFocus.gainTransientMayDuck, // Interrupt other audio
+          ),
+          iOS: AudioContextIOS(category: AVAudioSessionCategory.ambient),
+        ),
+      );
+
+      // Ensure volume is at maximum
+      await _audioPlayer.setVolume(1.0);
+
+      print('🔊 Audio session optimized for immediate playback');
+    } catch (e) {
+      print('❌ Error optimizing audio session: $e');
+    }
   }
 
   /// Start continuous ringtone (every 20 seconds for faster response)
@@ -222,15 +258,17 @@ class RingtoneService {
 
       if (_isAudioPreloaded) {
         // Use pre-loaded audio for instant playback
-        print('🎵 Using pre-loaded audio for instant playback (count: $_ringtoneCount)');
-        
+        print(
+          '🎵 Using pre-loaded audio for instant playback (count: $_ringtoneCount)',
+        );
+
         // Reset to beginning and play immediately
         await _audioPlayer.seek(Duration.zero);
         await _audioPlayer.resume();
       } else {
         // Fallback: Load and play (this will be slower)
         print('⚠️ Audio not pre-loaded, loading now (count: $_ringtoneCount)');
-        
+
         // Stop any currently playing sound
         await _audioPlayer.stop();
 
@@ -252,7 +290,9 @@ class RingtoneService {
         await _audioPlayer.play(AssetSource('sounds/notification.mp3'));
       }
 
-      print('🎵 Ringtone played using ringtone volume (count: $_ringtoneCount)');
+      print(
+        '🎵 Ringtone played using ringtone volume (count: $_ringtoneCount)',
+      );
 
       // Show notification
       await _showNotification();
