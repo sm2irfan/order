@@ -20,6 +20,20 @@ class RingtoneService {
   static Future<void> initialize() async {
     if (_isInitialized) return;
 
+    // Configure audio player to use ringtone volume from the start
+    await _audioPlayer.setAudioContext(
+      AudioContext(
+        android: AudioContextAndroid(
+          isSpeakerphoneOn: false,
+          stayAwake: false,
+          contentType: AndroidContentType.sonification,
+          usageType: AndroidUsageType.notification,
+          audioFocus: AndroidAudioFocus.gain,
+        ),
+        iOS: AudioContextIOS(category: AVAudioSessionCategory.ambient),
+      ),
+    );
+
     // Initialize notifications
     await _initializeNotifications();
 
@@ -27,7 +41,7 @@ class RingtoneService {
     await _restoreRingtoneState();
 
     _isInitialized = true;
-    print('🔔 RingtoneService initialized');
+    print('🔔 RingtoneService initialized with ringtone volume');
   }
 
   /// Initialize local notifications
@@ -87,6 +101,22 @@ class RingtoneService {
   static Future<bool> getRingtoneState() async {
     final prefs = await SharedPreferences.getInstance();
     return prefs.getBool(_ringtoneToggleKey) ?? false;
+  }
+
+  /// Enable ringtone programmatically (for new order notifications)
+  static Future<void> enableRingtone() async {
+    final prefs = await SharedPreferences.getInstance();
+    final currentState = await getRingtoneState();
+
+    if (!currentState) {
+      await prefs.setBool(_ringtoneToggleKey, true);
+      await _startContinuousRingtone();
+      print(
+        '🔔 Ringtone automatically enabled for new order - will play every 30 seconds',
+      );
+    } else {
+      print('🔔 Ringtone already enabled');
+    }
   }
 
   /// Start continuous ringtone (every 30 seconds)
@@ -159,13 +189,29 @@ class RingtoneService {
     try {
       // Increment count for this play
       _ringtoneCount++;
-      
+
       // Stop any currently playing sound
       await _audioPlayer.stop();
 
+      // Configure audio player to use ringtone stream instead of media stream
+      await _audioPlayer.setAudioContext(
+        AudioContext(
+          android: AudioContextAndroid(
+            isSpeakerphoneOn: false,
+            stayAwake: false,
+            contentType: AndroidContentType.sonification,
+            usageType: AndroidUsageType.notification,
+            audioFocus: AndroidAudioFocus.gain,
+          ),
+          iOS: AudioContextIOS(category: AVAudioSessionCategory.ambient),
+        ),
+      );
+
       // Play the notification sound
       await _audioPlayer.play(AssetSource('sounds/notification.mp3'));
-      print('🎵 Playing ringtone (count: $_ringtoneCount)');
+      print(
+        '🎵 Playing ringtone using ringtone volume (count: $_ringtoneCount)',
+      );
 
       // Show notification
       await _showNotification();

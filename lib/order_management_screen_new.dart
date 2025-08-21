@@ -126,9 +126,9 @@ class _OrderManagementScreenState extends State<OrderManagementScreen> {
   Color _getStatusColor(String status) {
     switch (status) {
       case 'Order Placed':
-        return Colors.blue;
-      case 'Order Processing':
         return Colors.orange;
+      case 'Order Processing':
+        return Colors.blue;
       case 'Order Shipped':
         return Colors.purple;
       case 'Out for Delivery':

@@ -4,6 +4,8 @@ import 'package:order_management/models/order_model.dart';
 import 'package:order_management/screens/desktop_order_screen.dart';
 import 'package:order_management/screens/mobile_order_screen.dart';
 import 'package:order_management/services/auth_service.dart';
+import 'package:order_management/services/background_order_monitor.dart';
+import 'package:order_management/services/ringtone_service.dart';
 import 'package:order_management/services/supabase_order_service.dart';
 import 'package:order_management/widgets/ringtone_toggle_widget.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -48,6 +50,10 @@ class _OrderManagementScreenState extends State<OrderManagementScreen> {
     _loadOrdersFromSupabase();
     _searchController.addListener(_filterOrders);
     _setupRealtimeSubscription();
+
+    // 🚀 Start background order monitoring for when app is backgrounded
+    _initializeBackgroundMonitoring();
+
     print('👂 Search controller listener added');
   }
 
@@ -55,8 +61,76 @@ class _OrderManagementScreenState extends State<OrderManagementScreen> {
   void dispose() {
     _searchController.dispose();
     _ordersChannel.unsubscribe();
+
+    // 🛑 Stop background monitoring when screen is disposed
+    _stopBackgroundMonitoring();
+
     print('🔌 Real-time subscription cleaned up');
     super.dispose();
+  }
+
+  /// Initialize background order monitoring
+  Future<void> _initializeBackgroundMonitoring() async {
+    try {
+      print('🚀 Initializing background order monitoring...');
+
+      // Restore previous state if any
+      await BackgroundOrderMonitor.restoreState();
+
+      // Start monitoring if not already running
+      if (!BackgroundOrderMonitor.isMonitoring) {
+        await BackgroundOrderMonitor.startMonitoring();
+      }
+
+      print('✅ Background order monitoring initialized');
+    } catch (e) {
+      print('❌ Error initializing background monitoring: $e');
+    }
+  }
+
+  /// Stop background order monitoring
+  Future<void> _stopBackgroundMonitoring() async {
+    try {
+      print('🛑 Stopping background order monitoring...');
+      await BackgroundOrderMonitor.stopMonitoring();
+      print('✅ Background order monitoring stopped');
+    } catch (e) {
+      print('❌ Error stopping background monitoring: $e');
+    }
+  }
+
+  /// Manually trigger a background check for testing
+  Future<void> _manualBackgroundCheck() async {
+    try {
+      print('🔍 Manual background check triggered...');
+      await BackgroundOrderMonitor.checkNow();
+
+      // Show a snackbar with the current status
+      final status = BackgroundOrderMonitor.getStatus();
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              'Background check completed.\n'
+              'Monitoring: ${status['isMonitoring'] ? 'Active' : 'Inactive'}\n'
+              'Last known orders: ${status['lastKnownOrderCount']}',
+            ),
+            duration: const Duration(seconds: 3),
+          ),
+        );
+      }
+    } catch (e) {
+      print('❌ Error in manual background check: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Background check failed: $e'),
+            backgroundColor: Colors.red,
+            duration: const Duration(seconds: 3),
+          ),
+        );
+      }
+    }
   }
 
   /// Setup real-time subscription for orders table
@@ -102,7 +176,7 @@ class _OrderManagementScreenState extends State<OrderManagementScreen> {
   }
 
   /// Handle new order insertion
-  void _handleNewOrder(PostgresChangePayload payload) {
+  void _handleNewOrder(PostgresChangePayload payload) async {
     final newOrderData = payload.newRecord;
     if (newOrderData['id'] != null) {
       final orderId = newOrderData['id'] as String;
@@ -123,6 +197,14 @@ class _OrderManagementScreenState extends State<OrderManagementScreen> {
           'created_at': newOrderData['created_at'],
         },
       );
+
+      // 🔔 Automatically enable ringtone for new order
+      try {
+        await RingtoneService.enableRingtone();
+        print('🔔 New order detected - ringtone automatically enabled');
+      } catch (e) {
+        print('❌ Error enabling ringtone for new order: $e');
+      }
 
       // Auto-refresh orders list without showing notification
       if (mounted) {
@@ -292,6 +374,14 @@ class _OrderManagementScreenState extends State<OrderManagementScreen> {
           _isLoading = false;
         });
         print('🔄 UI state updated with ${orders.length} orders');
+
+        // 🔄 Update background monitor with the current state
+        try {
+          await BackgroundOrderMonitor.updateKnownState(orders);
+          print('✅ Background monitor state updated');
+        } catch (e) {
+          print('❌ Error updating background monitor state: $e');
+        }
       }
     } catch (e) {
       print('💥 Error loading orders from Supabase: $e');
@@ -502,9 +592,9 @@ class _OrderManagementScreenState extends State<OrderManagementScreen> {
   Color _getStatusColor(String status) {
     switch (status) {
       case 'Order Placed':
-        return Colors.blue;
-      case 'Order Processing':
         return Colors.orange;
+      case 'Order Processing':
+        return Colors.blue;
       case 'Order Shipped':
         return Colors.purple;
       case 'Out for Delivery':
@@ -995,6 +1085,11 @@ class _OrderManagementScreenState extends State<OrderManagementScreen> {
             onPressed: _showRingtoneDialog,
           ),
           const SizedBox(width: 8),
+          IconButton(
+            icon: const Icon(Icons.sync),
+            tooltip: 'Check for New Orders (Background)',
+            onPressed: _manualBackgroundCheck,
+          ),
           IconButton(
             icon: const Icon(Icons.refresh),
             tooltip: 'Refresh Orders',

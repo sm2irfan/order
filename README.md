@@ -30,3 +30,12 @@ flutter build linux
 ## build flutter for mobile app 
 
 flutter build apk --release
+
+## find devices 
+
+adb devices
+
+## install apk into phone
+
+adb -s 192.168.8.100:39253 install build/app/outputs/flutter-apk/app-release.apk
+
