@@ -30,6 +30,45 @@ class Order {
     this.deliveryPartnerPhone,
     required this.items,
   });
+
+  // Create Order from Map (from database or API)
+  factory Order.fromMap(Map<String, dynamic> map, List<OrderDetail> items) {
+    return Order(
+      id: map['id'],
+      userId: map['user_id'],
+      customerName: map['customer_name'],
+      customerPhoneNumber: map['customer_phone_number'],
+      totalAmount: (map['total_amount'] as num).toDouble(),
+      deliveryOption: map['delivery_option'],
+      deliveryAddress: map['delivery_address'],
+      deliveryTimeSlot: map['delivery_time_slot'],
+      paymentMethod: map['payment_method'],
+      orderStatus: map['order_status'],
+      createdAt: DateTime.parse(map['created_at']),
+      deliveryPartnerName: map['delivery_partner_name'],
+      deliveryPartnerPhone: map['delivery_partner_phone'],
+      items: items,
+    );
+  }
+
+  // Convert Order to Map (for database storage)
+  Map<String, dynamic> toMap() {
+    return {
+      'id': id,
+      'user_id': userId,
+      'customer_name': customerName,
+      'customer_phone_number': customerPhoneNumber,
+      'total_amount': totalAmount,
+      'delivery_option': deliveryOption,
+      'delivery_address': deliveryAddress,
+      'delivery_time_slot': deliveryTimeSlot,
+      'payment_method': paymentMethod,
+      'order_status': orderStatus,
+      'created_at': createdAt.toIso8601String(),
+      'delivery_partner_name': deliveryPartnerName,
+      'delivery_partner_phone': deliveryPartnerPhone,
+    };
+  }
 }
 
 class OrderDetail {
@@ -50,6 +89,32 @@ class OrderDetail {
     this.discount,
     required this.price,
   });
+
+  // Create OrderDetail from Map (from database or API)
+  factory OrderDetail.fromMap(Map<String, dynamic> map) {
+    return OrderDetail(
+      productId: map['product_id'],
+      productName: map['product_name'] ?? 'Product ${map['product_id']}',
+      productImageUrl: map['product_image_url'],
+      quantity: map['quantity'],
+      unit: map['unit'],
+      discount: map['discount'],
+      price: (map['price'] as num).toDouble(),
+    );
+  }
+
+  // Convert OrderDetail to Map (for database storage)
+  Map<String, dynamic> toMap() {
+    return {
+      'product_id': productId,
+      'product_name': productName,
+      'product_image_url': productImageUrl,
+      'quantity': quantity,
+      'unit': unit,
+      'discount': discount,
+      'price': price,
+    };
+  }
 
   // Since API returns total price in 'price' field, itemTotal just subtracts discount
   double get itemTotal => price - (discount ?? 0);

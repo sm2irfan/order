@@ -3,6 +3,7 @@ import 'package:order_management/models/order_model.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:order_management/utils/file_export_utils.dart';
 import 'package:order_management/screens/desktop_order_screen_component/order_status.dart'; // Add this import
+import 'package:order_management/services/image_cache_service.dart';
 import 'package:process_run/shell.dart';
 import 'dart:io';
 
@@ -176,56 +177,7 @@ class _DesktopOrderScreenState extends State<DesktopOrderScreen> {
                     textAlign: TextAlign.center,
                   ),
                   const SizedBox(height: 16),
-                  ClipRRect(
-                    borderRadius: BorderRadius.circular(8),
-                    child: Image.network(
-                      item.productImageUrl!,
-                      fit: BoxFit.contain,
-                      height: 400,
-                      width: 400,
-                      loadingBuilder: (context, child, loadingProgress) {
-                        if (loadingProgress == null) return child;
-                        return SizedBox(
-                          height: 400,
-                          width: 400,
-                          child: Center(
-                            child: CircularProgressIndicator(
-                              value:
-                                  loadingProgress.expectedTotalBytes != null
-                                      ? loadingProgress.cumulativeBytesLoaded /
-                                          loadingProgress.expectedTotalBytes!
-                                      : null,
-                            ),
-                          ),
-                        );
-                      },
-                      errorBuilder: (context, error, stackTrace) {
-                        return Container(
-                          height: 400,
-                          width: 400,
-                          decoration: BoxDecoration(
-                            color: Colors.grey[200],
-                            borderRadius: BorderRadius.circular(8),
-                          ),
-                          child: const Column(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              Icon(
-                                Icons.broken_image,
-                                size: 64,
-                                color: Colors.grey,
-                              ),
-                              SizedBox(height: 8),
-                              Text(
-                                'Failed to load image',
-                                style: TextStyle(color: Colors.grey),
-                              ),
-                            ],
-                          ),
-                        );
-                      },
-                    ),
-                  ),
+                  ProductImageWidget(imageUrl: item.productImageUrl, size: 400),
                   const SizedBox(height: 16),
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceEvenly,

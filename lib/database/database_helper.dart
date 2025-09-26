@@ -8,9 +8,25 @@ class DatabaseHelper {
   DatabaseHelper._init();
 
   Future<Database> get database async {
-    if (_database != null) return _database!;
-    _database = await _initDB('order_management.db');
-    return _database!;
+    if (_database != null) {
+      try {
+        // Test if the database is still valid
+        await _database!.rawQuery('SELECT 1');
+        return _database!;
+      } catch (e) {
+        print('🔧 Existing database connection invalid: $e');
+        _database = null; // Force reinitialize
+      }
+    }
+
+    try {
+      _database = await _initDB('order_management.db');
+      print('✅ Database initialized successfully');
+      return _database!;
+    } catch (e) {
+      print('❌ Failed to initialize database: $e');
+      rethrow;
+    }
   }
 
   Future<Database> _initDB(String filePath) async {
@@ -20,7 +36,42 @@ class DatabaseHelper {
     // Adding console log for database path
     print('Database path: $path');
 
-    return await openDatabase(path, version: 1, onCreate: _createDB);
+    return await openDatabase(
+      path,
+      version: 2,
+      onCreate: _createDB,
+      onUpgrade: _upgradeDB,
+      readOnly: false, // Explicitly set to read-write mode
+      singleInstance: true, // Ensure single instance
+    );
+  }
+
+  // Check database health and fix issues
+  Future<bool> checkDatabaseHealth() async {
+    try {
+      Database db = await instance.database;
+
+      // Test basic operations
+      await db.rawQuery('SELECT COUNT(*) FROM orders');
+      await db.rawQuery('SELECT COUNT(*) FROM order_details');
+
+      print('✅ Database health check passed');
+      return true;
+    } catch (e) {
+      print('❌ Database health check failed: $e');
+
+      // Try to fix by reinitializing
+      try {
+        _database = null;
+        Database db = await instance.database;
+        await db.rawQuery('SELECT COUNT(*) FROM orders');
+        print('✅ Database fixed after reinitialization');
+        return true;
+      } catch (fixError) {
+        print('❌ Database fix failed: $fixError');
+        return false;
+      }
+    }
   }
 
   Future _createDB(Database db, int version) async {
@@ -45,11 +96,13 @@ class DatabaseHelper {
     )
     ''');
 
-    // Create orders table
+    // Create orders table with customer fields
     await db.execute('''
     CREATE TABLE orders (
       id TEXT PRIMARY KEY,
       user_id TEXT,
+      customer_name TEXT,
+      customer_phone_number TEXT,
       total_amount REAL NOT NULL,
       delivery_option TEXT NOT NULL,
       delivery_address TEXT,
@@ -105,6 +158,17 @@ class DatabaseHelper {
     ''');
   }
 
+  Future _upgradeDB(Database db, int oldVersion, int newVersion) async {
+    if (oldVersion < 2) {
+      // Add customer fields to orders table
+      await db.execute('ALTER TABLE orders ADD COLUMN customer_name TEXT');
+      await db.execute(
+        'ALTER TABLE orders ADD COLUMN customer_phone_number TEXT',
+      );
+      print('Database upgraded from version $oldVersion to $newVersion');
+    }
+  }
+
   // Get a config value by key
   Future<String?> getConfigValue(String key) async {
     Database db = await instance.database;
@@ -148,6 +212,290 @@ class DatabaseHelper {
         whereArgs: [row['id']],
       );
     }
+  }
+
+  // Offline order management methods
+
+  // Save order to local database
+  Future<void> saveOrderToLocal(Map<String, dynamic> order) async {
+    Database db = await instance.database;
+
+    await db.transaction((txn) async {
+      // Insert order
+      await txn.insert('orders', {
+        'id': order['id'],
+        'user_id': order['user_id'],
+        'customer_name': order['customer_name'],
+        'customer_phone_number': order['customer_phone_number'],
+        'total_amount': order['total_amount'],
+        'delivery_option': order['delivery_option'],
+        'delivery_address': order['delivery_address'],
+        'delivery_time_slot': order['delivery_time_slot'],
+        'payment_method': order['payment_method'],
+        'order_status': order['order_status'],
+        'created_at': order['created_at'],
+        'updated_at': order['updated_at'],
+        'delivery_partner_name': order['delivery_partner_name'],
+        'delivery_partner_phone': order['delivery_partner_phone'],
+      }, conflictAlgorithm: ConflictAlgorithm.replace);
+
+      // Insert order details
+      if (order['items'] != null) {
+        for (var item in order['items']) {
+          await txn.insert('order_details', {
+            'order_id': order['id'],
+            'product_id': item['product_id'],
+            'quantity': item['quantity'],
+            'unit': item['unit'],
+            'discount': item['discount'] ?? 0,
+            'price': item['price'],
+            'created_at': item['created_at'],
+            'updated_at': item['updated_at'],
+          }, conflictAlgorithm: ConflictAlgorithm.replace);
+        }
+      }
+    });
+
+    print('Saved order ${order['id']} to local database');
+  }
+
+  // Get orders with details from local database
+  Future<List<Map<String, dynamic>>> getOrdersWithDetails() async {
+    try {
+      Database db = await instance.database;
+
+      // Test database connectivity with a simple query first
+      await db.rawQuery('SELECT 1');
+      print('📊 Database connectivity test passed');
+
+      // Get all orders
+      List<Map<String, dynamic>> orders = await db.query(
+        'orders',
+        orderBy: 'created_at DESC',
+      );
+      print('📋 Retrieved ${orders.length} orders from local database');
+
+      if (orders.isEmpty) return orders;
+
+      // Get all order details
+      List<Map<String, dynamic>> allDetails = await db.query(
+        'order_details',
+        orderBy: 'order_id, id',
+      );
+      print(
+        '📦 Retrieved ${allDetails.length} order details from local database',
+      );
+
+      // Group details by order_id
+      Map<String, List<Map<String, dynamic>>> detailsMap = {};
+      for (var detail in allDetails) {
+        String orderId = detail['order_id'];
+        if (!detailsMap.containsKey(orderId)) {
+          detailsMap[orderId] = [];
+        }
+
+        // Create a mutable copy of the detail map to avoid read-only issues
+        Map<String, dynamic> mutableDetail = Map<String, dynamic>.from(detail);
+
+        // Add basic product name (will be enhanced by service with cached names)
+        mutableDetail['product_name'] =
+            'Product ${mutableDetail['product_id']}';
+        mutableDetail['product_image_url'] = null;
+
+        detailsMap[orderId]!.add(mutableDetail);
+      }
+
+      // Attach details to each order with mutable copies
+      List<Map<String, dynamic>> mutableOrders = [];
+      for (var order in orders) {
+        String orderId = order['id'];
+        Map<String, dynamic> mutableOrder = Map<String, dynamic>.from(order);
+        mutableOrder['details'] = detailsMap[orderId] ?? [];
+        mutableOrders.add(mutableOrder);
+      }
+
+      print(
+        '✅ Successfully processed ${mutableOrders.length} orders with details',
+      );
+      return mutableOrders;
+    } catch (e) {
+      print('❌ Error in getOrdersWithDetails: $e');
+      print('🔧 Error type: ${e.runtimeType}');
+
+      // Try to reinitialize database connection
+      try {
+        print('🔄 Attempting to reinitialize database connection...');
+        _database = null; // Force reinitialize
+        Database db = await instance.database;
+        print('✅ Database reinitialized successfully');
+
+        // Retry the query
+        List<Map<String, dynamic>> orders = await db.query(
+          'orders',
+          orderBy: 'created_at DESC',
+        );
+        print('🔄 Retry successful: Retrieved ${orders.length} orders');
+        return orders;
+      } catch (retryError) {
+        print('❌ Retry failed: $retryError');
+        rethrow;
+      }
+    }
+  }
+
+  // Search orders in local database
+  Future<List<Map<String, dynamic>>> searchOrders(String query) async {
+    Database db = await instance.database;
+
+    List<Map<String, dynamic>> orders = await db.query(
+      'orders',
+      where: '''
+        LOWER(id) LIKE LOWER(?) OR 
+        LOWER(customer_name) LIKE LOWER(?) OR 
+        LOWER(customer_phone_number) LIKE LOWER(?) OR
+        LOWER(order_status) LIKE LOWER(?)
+      ''',
+      whereArgs: ['%$query%', '%$query%', '%$query%', '%$query%'],
+      orderBy: 'created_at DESC',
+    );
+
+    if (orders.isEmpty) return orders;
+
+    // Get details for matching orders
+    List<String> orderIds = orders.map((o) => o['id'] as String).toList();
+    String placeholders = orderIds.map((_) => '?').join(',');
+
+    List<Map<String, dynamic>> allDetails = await db.query(
+      'order_details',
+      where: 'order_id IN ($placeholders)',
+      whereArgs: orderIds,
+      orderBy: 'order_id, id',
+    );
+
+    // Group details by order_id
+    Map<String, List<Map<String, dynamic>>> detailsMap = {};
+    for (var detail in allDetails) {
+      String orderId = detail['order_id'];
+      if (!detailsMap.containsKey(orderId)) {
+        detailsMap[orderId] = [];
+      }
+
+      // Create a mutable copy of the detail map to avoid read-only issues
+      Map<String, dynamic> mutableDetail = Map<String, dynamic>.from(detail);
+
+      mutableDetail['product_name'] = 'Product ${mutableDetail['product_id']}';
+      mutableDetail['product_image_url'] = null;
+
+      detailsMap[orderId]!.add(mutableDetail);
+    }
+
+    // Attach details to each order with mutable copies
+    List<Map<String, dynamic>> mutableOrders = [];
+    for (var order in orders) {
+      String orderId = order['id'];
+      Map<String, dynamic> mutableOrder = Map<String, dynamic>.from(order);
+      mutableOrder['details'] = detailsMap[orderId] ?? [];
+      mutableOrders.add(mutableOrder);
+    }
+
+    return mutableOrders;
+  }
+
+  // Filter orders by status from local database
+  Future<List<Map<String, dynamic>>> getOrdersByStatus(String status) async {
+    Database db = await instance.database;
+
+    List<Map<String, dynamic>> orders;
+    if (status == 'All') {
+      orders = await db.query('orders', orderBy: 'created_at DESC');
+    } else {
+      orders = await db.query(
+        'orders',
+        where: 'order_status = ?',
+        whereArgs: [status],
+        orderBy: 'created_at DESC',
+      );
+    }
+
+    if (orders.isEmpty) return orders;
+
+    // Get details for matching orders
+    List<String> orderIds = orders.map((o) => o['id'] as String).toList();
+    String placeholders = orderIds.map((_) => '?').join(',');
+
+    List<Map<String, dynamic>> allDetails = await db.query(
+      'order_details',
+      where: 'order_id IN ($placeholders)',
+      whereArgs: orderIds,
+      orderBy: 'order_id, id',
+    );
+
+    // Group details by order_id
+    Map<String, List<Map<String, dynamic>>> detailsMap = {};
+    for (var detail in allDetails) {
+      String orderId = detail['order_id'];
+      if (!detailsMap.containsKey(orderId)) {
+        detailsMap[orderId] = [];
+      }
+
+      // Create a mutable copy of the detail map to avoid read-only issues
+      Map<String, dynamic> mutableDetail = Map<String, dynamic>.from(detail);
+
+      mutableDetail['product_name'] = 'Product ${mutableDetail['product_id']}';
+      mutableDetail['product_image_url'] = null;
+
+      detailsMap[orderId]!.add(mutableDetail);
+    }
+
+    // Attach details to each order with mutable copies
+    List<Map<String, dynamic>> mutableOrders = [];
+    for (var order in orders) {
+      String orderId = order['id'];
+      Map<String, dynamic> mutableOrder = Map<String, dynamic>.from(order);
+      mutableOrder['details'] = detailsMap[orderId] ?? [];
+      mutableOrders.add(mutableOrder);
+    }
+
+    return mutableOrders;
+  }
+
+  // Update order status in local database
+  Future<void> updateOrderStatus(String orderId, String newStatus) async {
+    Database db = await instance.database;
+    await db.update(
+      'orders',
+      {
+        'order_status': newStatus,
+        'updated_at': DateTime.now().toIso8601String(),
+      },
+      where: 'id = ?',
+      whereArgs: [orderId],
+    );
+  }
+
+  // Get order status counts from local database
+  Future<Map<String, int>> getOrderStatusCounts() async {
+    Database db = await instance.database;
+
+    List<Map<String, dynamic>> results = await db.rawQuery('''
+      SELECT order_status, COUNT(*) as count 
+      FROM orders 
+      GROUP BY order_status
+    ''');
+
+    Map<String, int> counts = {};
+    for (var result in results) {
+      counts[result['order_status']] = result['count'];
+    }
+
+    return counts;
+  }
+
+  // Delete all orders from local database (for testing/reset)
+  Future<void> clearAllOrders() async {
+    Database db = await instance.database;
+    await db.delete('order_details');
+    await db.delete('orders');
   }
 
   // Insert or update a profile

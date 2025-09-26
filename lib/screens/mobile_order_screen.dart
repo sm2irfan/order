@@ -34,56 +34,62 @@ class MobileOrderScreen extends StatelessWidget {
       child: Column(
         children: <Widget>[
           // Search and Filter Bar
-          Row(
-            children: <Widget>[
-              Expanded(
-                child: TextField(
-                  controller: searchController,
-                  style: const TextStyle(
-                    fontSize: 16,
-                  ), // Added larger font size
-                  decoration: InputDecoration(
-                    labelText: 'Search by Order ID',
-                    labelStyle: const TextStyle(
+          SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: Row(
+              children: <Widget>[
+                SizedBox(
+                  width: 250,
+                  child: TextField(
+                    controller: searchController,
+                    style: const TextStyle(
                       fontSize: 16,
-                    ), // Added larger label font
-                    prefixIcon: const Icon(Icons.search),
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(8.0),
+                    ), // Added larger font size
+                    decoration: InputDecoration(
+                      labelText: 'Search by Order ID',
+                      labelStyle: const TextStyle(
+                        fontSize: 16,
+                      ), // Added larger label font
+                      prefixIcon: const Icon(Icons.search),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(8.0),
+                      ),
                     ),
                   ),
                 ),
-              ),
-              const SizedBox(width: 10),
-              DropdownButton<String>(
-                value: selectedStatusFilter,
-                icon: const Icon(Icons.filter_list),
-                elevation: 16,
-                style: TextStyle(
-                  color: Theme.of(context).primaryColor,
-                  fontSize: 16, // Increased from default
-                  fontWeight: FontWeight.w500,
-                ),
-                underline: Container(
-                  height: 2,
-                  color: Theme.of(context).primaryColorDark,
-                ),
-                onChanged: onFilterChange,
-                items:
-                    orderStatuses.map<DropdownMenuItem<String>>((String value) {
-                      return DropdownMenuItem<String>(
-                        value: value,
-                        child: SelectableText(
-                          value,
-                          style: const TextStyle(
-                            fontSize: 16, // Added larger font size
-                            fontWeight: FontWeight.w500,
+                const SizedBox(width: 10),
+                DropdownButton<String>(
+                  value: selectedStatusFilter,
+                  icon: const Icon(Icons.filter_list),
+                  elevation: 16,
+                  style: TextStyle(
+                    color: Theme.of(context).primaryColor,
+                    fontSize: 16, // Increased from default
+                    fontWeight: FontWeight.w500,
+                  ),
+                  underline: Container(
+                    height: 2,
+                    color: Theme.of(context).primaryColorDark,
+                  ),
+                  onChanged: onFilterChange,
+                  items:
+                      orderStatuses.map<DropdownMenuItem<String>>((
+                        String value,
+                      ) {
+                        return DropdownMenuItem<String>(
+                          value: value,
+                          child: SelectableText(
+                            value,
+                            style: const TextStyle(
+                              fontSize: 16, // Added larger font size
+                              fontWeight: FontWeight.w500,
+                            ),
                           ),
-                        ),
-                      );
-                    }).toList(),
-              ),
-            ],
+                        );
+                      }).toList(),
+                ),
+              ],
+            ),
           ),
           const SizedBox(height: 20),
 
@@ -131,70 +137,75 @@ class MobileOrderScreen extends StatelessWidget {
                                   children: [
                                     const SizedBox(height: 4),
                                     // Status indicator now shows current status with change button
-                                    Row(
-                                      children: [
-                                        Container(
-                                          padding: const EdgeInsets.symmetric(
-                                            horizontal: 6,
-                                            vertical: 2,
-                                          ),
-                                          decoration: BoxDecoration(
-                                            color: getStatusColor(
-                                              order.orderStatus,
-                                            ),
-                                            borderRadius: BorderRadius.circular(
-                                              12,
-                                            ),
-                                          ),
-                                          child: SelectableText(
-                                            order.orderStatus,
-                                            style: const TextStyle(
-                                              color: Colors.white,
-                                              fontSize: 14, // Increased from 12
-                                              fontWeight: FontWeight.w500,
-                                            ),
-                                          ),
-                                        ),
-                                        const SizedBox(width: 8),
-                                        GestureDetector(
-                                          onTap:
-                                              () => _showStatusChangeDialog(
-                                                context,
-                                                order,
-                                              ),
-                                          child: Container(
+                                    SingleChildScrollView(
+                                      scrollDirection: Axis.horizontal,
+                                      child: Row(
+                                        children: [
+                                          Container(
                                             padding: const EdgeInsets.symmetric(
                                               horizontal: 6,
                                               vertical: 2,
                                             ),
                                             decoration: BoxDecoration(
-                                              color: Colors.blue,
+                                              color: getStatusColor(
+                                                order.orderStatus,
+                                              ),
                                               borderRadius:
                                                   BorderRadius.circular(12),
                                             ),
-                                            child: const Row(
-                                              mainAxisSize: MainAxisSize.min,
-                                              children: [
-                                                Icon(
-                                                  Icons.edit,
-                                                  color: Colors.white,
-                                                  size: 12,
-                                                ),
-                                                SizedBox(width: 2),
-                                                Text(
-                                                  'Change',
-                                                  style: TextStyle(
-                                                    color: Colors.white,
-                                                    fontSize:
-                                                        14, // Increased from 12
-                                                    fontWeight: FontWeight.w500,
-                                                  ),
-                                                ),
-                                              ],
+                                            child: SelectableText(
+                                              order.orderStatus,
+                                              style: const TextStyle(
+                                                color: Colors.white,
+                                                fontSize:
+                                                    14, // Increased from 12
+                                                fontWeight: FontWeight.w500,
+                                              ),
                                             ),
                                           ),
-                                        ),
-                                      ],
+                                          const SizedBox(width: 8),
+                                          GestureDetector(
+                                            onTap:
+                                                () => _showStatusChangeDialog(
+                                                  context,
+                                                  order,
+                                                ),
+                                            child: Container(
+                                              padding:
+                                                  const EdgeInsets.symmetric(
+                                                    horizontal: 6,
+                                                    vertical: 2,
+                                                  ),
+                                              decoration: BoxDecoration(
+                                                color: Colors.blue,
+                                                borderRadius:
+                                                    BorderRadius.circular(12),
+                                              ),
+                                              child: const Row(
+                                                mainAxisSize: MainAxisSize.min,
+                                                children: [
+                                                  Icon(
+                                                    Icons.edit,
+                                                    color: Colors.white,
+                                                    size: 12,
+                                                  ),
+                                                  SizedBox(width: 2),
+                                                  Text(
+                                                    'Change',
+                                                    style: TextStyle(
+                                                      color: Colors.white,
+                                                      fontSize:
+                                                          14, // Increased from 12
+                                                      fontWeight:
+                                                          FontWeight.w500,
+                                                    ),
+                                                  ),
+                                                ],
+                                              ),
+                                            ),
+                                          ),
+                                        ],
+                                      ),
                                     ),
                                     const SizedBox(height: 4),
                                     SelectableText(
@@ -305,7 +316,7 @@ class MobileOrderScreen extends StatelessWidget {
                         ),
                         onTap: () {
                           Navigator.of(context).pop();
-                          _confirmStatusChange(context, order, status);
+                          _handleStatusChange(context, order, status);
                         },
                       ),
                     ),
@@ -327,8 +338,31 @@ class MobileOrderScreen extends StatelessWidget {
     );
   }
 
-  // Method to confirm status change
-  void _confirmStatusChange(
+  // Method to handle status change with password check for cancellation
+  void _handleStatusChange(
+    BuildContext context,
+    Order order,
+    String newStatus,
+  ) {
+    // If changing to "Order Cancelled", require password
+    if (newStatus == "Order Cancelled") {
+      _showPasswordDialog(context, order, newStatus);
+    } else {
+      // For other status changes, proceed directly
+      if (onStatusChange != null) {
+        onStatusChange!(order, newStatus);
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Status change functionality not implemented yet'),
+          ),
+        );
+      }
+    }
+  }
+
+  // Method to show password dialog for order cancellation
+  void _showPasswordDialog(
     BuildContext context,
     Order order,
     String newStatus,
@@ -336,57 +370,136 @@ class MobileOrderScreen extends StatelessWidget {
     showDialog(
       context: context,
       builder:
-          (BuildContext context) => AlertDialog(
-            title: const Text(
-              'Confirm Status Change',
-              style: TextStyle(
-                fontSize: 20, // Increased font size
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-            content: Text(
-              'Are you sure you want to change the status of Order ${order.id} from "${order.orderStatus}" to "$newStatus"?',
-              style: const TextStyle(
-                fontSize: 16, // Increased font size
-                fontWeight: FontWeight.w500,
-              ),
-            ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.of(context).pop(),
-                child: const Text(
-                  'Cancel',
-                  style: TextStyle(
-                    fontSize: 16, // Increased font size
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-              ),
-              ElevatedButton(
-                onPressed: () {
-                  Navigator.of(context).pop();
-                  if (onStatusChange != null) {
-                    onStatusChange!(order, newStatus);
-                  } else {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                        content: Text(
-                          'Status change functionality not implemented yet',
-                        ),
-                      ),
-                    );
-                  }
-                },
-                child: const Text(
-                  'Confirm',
-                  style: TextStyle(
-                    fontSize: 16, // Increased font size
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-              ),
-            ],
+          (BuildContext context) => _PasswordDialog(
+            order: order,
+            newStatus: newStatus,
+            onStatusChange: onStatusChange,
           ),
+    );
+  }
+}
+
+class _PasswordDialog extends StatefulWidget {
+  final Order order;
+  final String newStatus;
+  final Function(Order, String)? onStatusChange;
+
+  const _PasswordDialog({
+    required this.order,
+    required this.newStatus,
+    this.onStatusChange,
+  });
+
+  @override
+  State<_PasswordDialog> createState() => _PasswordDialogState();
+}
+
+class _PasswordDialogState extends State<_PasswordDialog> {
+  final TextEditingController _passwordController = TextEditingController();
+  bool _obscurePassword = true;
+
+  @override
+  void dispose() {
+    _passwordController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text(
+        'Password Required',
+        style: TextStyle(
+          fontSize: 20,
+          fontWeight: FontWeight.bold,
+          color: Colors.red,
+        ),
+      ),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Enter your password to cancel Order ${widget.order.id}',
+            style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w500),
+          ),
+          const SizedBox(height: 16),
+          TextField(
+            controller: _passwordController,
+            obscureText: _obscurePassword,
+            decoration: InputDecoration(
+              labelText: 'Password',
+              labelStyle: const TextStyle(fontSize: 16),
+              prefixIcon: const Icon(Icons.lock),
+              suffixIcon: IconButton(
+                icon: Icon(
+                  _obscurePassword ? Icons.visibility : Icons.visibility_off,
+                ),
+                onPressed: () {
+                  setState(() {
+                    _obscurePassword = !_obscurePassword;
+                  });
+                },
+              ),
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(8.0),
+              ),
+            ),
+            style: const TextStyle(fontSize: 16),
+          ),
+        ],
+      ),
+      actions: [
+        TextButton(
+          onPressed: () {
+            Navigator.of(context).pop();
+          },
+          child: const Text(
+            'Cancel',
+            style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+          ),
+        ),
+        ElevatedButton(
+          style: ElevatedButton.styleFrom(
+            backgroundColor: Colors.red,
+            foregroundColor: Colors.white,
+          ),
+          onPressed: () {
+            final password = _passwordController.text.trim();
+            Navigator.of(context).pop();
+
+            if (password.isNotEmpty) {
+              // Here you can add password validation logic
+              // For now, we'll proceed with any non-empty password
+              if (widget.onStatusChange != null) {
+                widget.onStatusChange!(widget.order, widget.newStatus);
+              } else {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text(
+                      'Status change functionality not implemented yet',
+                    ),
+                  ),
+                );
+              }
+            } else {
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                  content: Text(
+                    'Password is required to cancel an order',
+                    style: TextStyle(color: Colors.white),
+                  ),
+                  backgroundColor: Colors.red,
+                ),
+              );
+            }
+          },
+          child: const Text(
+            'Cancel Order',
+            style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+          ),
+        ),
+      ],
     );
   }
 }

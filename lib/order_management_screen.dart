@@ -3,8 +3,11 @@ import 'package:flutter/material.dart';
 import 'package:order_management/models/order_model.dart';
 import 'package:order_management/screens/desktop_order_screen.dart';
 import 'package:order_management/screens/mobile_order_screen.dart';
+import 'package:order_management/screens/cache_management_screen.dart';
 import 'package:order_management/services/auth_service.dart';
 import 'package:order_management/services/supabase_order_service.dart';
+import 'package:order_management/services/offline_order_service.dart';
+import 'package:order_management/services/image_cache_service.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:order_management/main.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -36,6 +39,7 @@ class _OrderManagementScreenState extends State<OrderManagementScreen> {
 
   bool _isLoading = false;
   final AuthService _authService = AuthService.instance;
+  final OfflineOrderService _offlineOrderService = OfflineOrderService();
 
   // Real-time subscription for orders table
   late final RealtimeChannel _ordersChannel;
@@ -44,17 +48,66 @@ class _OrderManagementScreenState extends State<OrderManagementScreen> {
   void initState() {
     super.initState();
     print('🚀 OrderManagementScreen initializing...');
-    _loadOrdersFromSupabase();
+    _initializeOfflineService();
     _searchController.addListener(_filterOrders);
     _setupRealtimeSubscription();
     print('👂 Search controller listener added');
+  }
+
+  // Initialize offline service and load orders
+  Future<void> _initializeOfflineService() async {
+    print('🚀 Initializing offline service and loading orders...');
+
+    try {
+      // Initialize offline service
+      await _offlineOrderService.initialize();
+
+      // Load orders using offline-first approach
+      await _loadOrdersOfflineFirst();
+    } catch (e) {
+      print('💥 Error initializing offline service: $e');
+      // Fallback to online loading
+      _loadOrdersFromSupabase();
+    }
+  }
+
+  // Load orders using offline-first approach
+  Future<void> _loadOrdersOfflineFirst() async {
+    print('📱 Loading orders from local database (offline-first)...');
+
+    setState(() {
+      _isLoading = true;
+    });
+
+    try {
+      List<Order> orders = await _offlineOrderService.getOrders();
+
+      setState(() {
+        _allOrders = orders;
+        _filteredOrders = orders;
+        _isLoading = false;
+      });
+
+      print(
+        '✅ Successfully loaded ${orders.length} orders from local database',
+      );
+    } catch (e) {
+      print('💥 Error loading orders from local database: $e');
+      setState(() {
+        _isLoading = false;
+      });
+
+      // Fallback to original method
+      _loadOrdersFromSupabase();
+    }
   }
 
   @override
   void dispose() {
     _searchController.dispose();
     _ordersChannel.unsubscribe();
-    print('🔌 Real-time subscription cleaned up');
+    _offlineOrderService.dispose();
+    print('🔌 Real-time subscription and offline service cleaned up');
     super.dispose();
   }
 
@@ -123,9 +176,9 @@ class _OrderManagementScreenState extends State<OrderManagementScreen> {
         },
       );
 
-      // Auto-refresh orders list without showing notification
+      // Auto-refresh orders list using offline-first approach
       if (mounted) {
-        _loadOrdersFromSupabase();
+        _loadOrdersOfflineFirst();
       }
     }
   }
@@ -165,9 +218,9 @@ class _OrderManagementScreenState extends State<OrderManagementScreen> {
         },
       );
 
-      // Auto-refresh orders list without showing notification for status changes
+      // Auto-refresh orders list using offline-first approach for status changes
       if (oldStatus != newStatus && mounted) {
-        _loadOrdersFromSupabase();
+        _loadOrdersOfflineFirst();
       }
     }
   }
@@ -193,9 +246,9 @@ class _OrderManagementScreenState extends State<OrderManagementScreen> {
         },
       );
 
-      // Auto-refresh orders list without showing notification for deletions
+      // Auto-refresh orders list using offline-first approach for deletions
       if (mounted) {
-        _loadOrdersFromSupabase();
+        _loadOrdersOfflineFirst();
       }
     }
   }
@@ -417,48 +470,22 @@ class _OrderManagementScreenState extends State<OrderManagementScreen> {
         ),
       );
 
-      // Update status via Supabase service
-      final service = SupabaseOrderService();
-      final success = await service.updateOrderStatus(order.id, newStatus);
+      // Update status via offline service (will sync to remote automatically)
+      await _offlineOrderService.updateOrderStatus(order.id, newStatus);
 
-      if (success) {
-        // Update the order locally after successful database update
-        final updatedOrder = Order(
-          id: order.id,
-          orderStatus: newStatus,
-          createdAt: order.createdAt,
-          totalAmount: order.totalAmount,
-          paymentMethod: order.paymentMethod,
-          deliveryOption: order.deliveryOption,
-          deliveryTimeSlot: order.deliveryTimeSlot,
-          deliveryAddress: order.deliveryAddress,
-          customerName: order.customerName,
-          customerPhoneNumber: order.customerPhoneNumber,
-          items: order.items,
-        );
+      // Refresh orders from local database
+      await _loadOrdersOfflineFirst();
 
-        // Update the order in the list
-        setState(() {
-          final index = _allOrders.indexWhere((o) => o.id == order.id);
-          if (index != -1) {
-            _allOrders[index] = updatedOrder;
-            _filterOrders(); // Refresh the filtered list
-          }
-        });
+      // Show success message
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('✅ Order ${order.id} status updated to "$newStatus"'),
+          backgroundColor: Colors.green,
+          duration: const Duration(seconds: 3),
+        ),
+      );
 
-        // Show success message
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('✅ Order ${order.id} status updated to "$newStatus"'),
-            backgroundColor: Colors.green,
-            duration: const Duration(seconds: 3),
-          ),
-        );
-
-        print('✅ Order status updated successfully in database and UI');
-      } else {
-        throw Exception('Service returned failure');
-      }
+      print('✅ Order status updated successfully in database and UI');
     } catch (e) {
       print('❌ Error updating order status: $e');
 
@@ -787,62 +814,13 @@ class _OrderManagementScreenState extends State<OrderManagementScreen> {
                     textAlign: TextAlign.center,
                   ),
                   const SizedBox(height: 16),
-                  GestureDetector(
+                  ProductImageWidget(
+                    imageUrl: item.productImageUrl,
+                    size: 300,
                     onTap: () {
                       print('🖼️ Image tapped - opening full screen');
                       _showFullScreenImage(context, item);
                     },
-                    child: ClipRRect(
-                      borderRadius: BorderRadius.circular(8),
-                      child: Image.network(
-                        item.productImageUrl!,
-                        fit: BoxFit.contain,
-                        height: 300,
-                        width: 300,
-                        loadingBuilder: (context, child, loadingProgress) {
-                          if (loadingProgress == null) return child;
-                          return SizedBox(
-                            height: 300,
-                            width: 300,
-                            child: Center(
-                              child: CircularProgressIndicator(
-                                value:
-                                    loadingProgress.expectedTotalBytes != null
-                                        ? loadingProgress
-                                                .cumulativeBytesLoaded /
-                                            loadingProgress.expectedTotalBytes!
-                                        : null,
-                              ),
-                            ),
-                          );
-                        },
-                        errorBuilder: (context, error, stackTrace) {
-                          return Container(
-                            height: 300,
-                            width: 300,
-                            decoration: BoxDecoration(
-                              color: Colors.grey[200],
-                              borderRadius: BorderRadius.circular(8),
-                            ),
-                            child: const Column(
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              children: [
-                                Icon(
-                                  Icons.broken_image,
-                                  size: 64,
-                                  color: Colors.grey,
-                                ),
-                                SizedBox(height: 8),
-                                Text(
-                                  'Failed to load image',
-                                  style: TextStyle(color: Colors.grey),
-                                ),
-                              ],
-                            ),
-                          );
-                        },
-                      ),
-                    ),
                   ),
                   const SizedBox(height: 8),
                   const Text(
@@ -874,106 +852,21 @@ class _OrderManagementScreenState extends State<OrderManagementScreen> {
   void _showFullScreenImage(BuildContext context, OrderDetail item) {
     print('🖼️ _showFullScreenImage called for: ${item.productName}');
 
-    showDialog(
-      context: context,
-      barrierColor: Colors.black87,
-      builder:
-          (BuildContext context) => Scaffold(
-            backgroundColor: Colors.transparent,
-            body: GestureDetector(
-              onTap: () {
-                print('🖼️ Full screen image tapped - closing');
-                Navigator.of(context).pop();
-              },
-              child: Center(
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    // Product name at the top
-                    Container(
-                      width: double.infinity,
-                      padding: const EdgeInsets.all(16),
-                      child: Text(
-                        item.productName,
-                        style: const TextStyle(
-                          fontSize: 24,
-                          fontWeight: FontWeight.bold,
-                          color: Colors.white,
-                        ),
-                        textAlign: TextAlign.center,
-                      ),
-                    ),
-                    // Full screen image
-                    Expanded(
-                      child: InteractiveViewer(
-                        minScale: 0.5,
-                        maxScale: 4.0,
-                        child: Image.network(
-                          item.productImageUrl!,
-                          fit: BoxFit.contain,
-                          loadingBuilder: (context, child, loadingProgress) {
-                            if (loadingProgress == null) return child;
-                            return Center(
-                              child: CircularProgressIndicator(
-                                color: Colors.white,
-                                value:
-                                    loadingProgress.expectedTotalBytes != null
-                                        ? loadingProgress
-                                                .cumulativeBytesLoaded /
-                                            loadingProgress.expectedTotalBytes!
-                                        : null,
-                              ),
-                            );
-                          },
-                          errorBuilder: (context, error, stackTrace) {
-                            return const Center(
-                              child: Column(
-                                mainAxisAlignment: MainAxisAlignment.center,
-                                children: [
-                                  Icon(
-                                    Icons.broken_image,
-                                    size: 96,
-                                    color: Colors.white,
-                                  ),
-                                  SizedBox(height: 16),
-                                  Text(
-                                    'Failed to load image',
-                                    style: TextStyle(
-                                      color: Colors.white,
-                                      fontSize: 18,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            );
-                          },
-                        ),
-                      ),
-                    ),
-                    // Instructions at the bottom
-                    Container(
-                      width: double.infinity,
-                      padding: const EdgeInsets.all(16),
-                      child: const Column(
-                        children: [
-                          Text(
-                            'Pinch to zoom • Tap to close',
-                            style: TextStyle(
-                              fontSize: 16,
-                              color: Colors.white70,
-                            ),
-                            textAlign: TextAlign.center,
-                          ),
-                          SizedBox(height: 8),
-                          Icon(Icons.close, color: Colors.white70, size: 24),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
-              ),
+    if (item.productImageUrl == null || item.productImageUrl!.isEmpty) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Image not available')));
+      return;
+    }
+
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder:
+            (context) => FullScreenImageViewer(
+              imageUrl: item.productImageUrl!,
+              productName: item.productName,
             ),
-          ),
+      ),
     );
   }
 
@@ -993,10 +886,41 @@ class _OrderManagementScreenState extends State<OrderManagementScreen> {
             tooltip: 'Refresh Orders',
             onPressed: _loadOrdersFromSupabase,
           ),
-          IconButton(
-            icon: const Icon(Icons.logout),
-            tooltip: 'Logout',
-            onPressed: () => _authService.handleLogout(context),
+          PopupMenuButton<String>(
+            icon: const Icon(Icons.more_vert),
+            onSelected: (String value) {
+              switch (value) {
+                case 'cache':
+                  Navigator.of(context).push(
+                    MaterialPageRoute(
+                      builder: (context) => const CacheManagementScreen(),
+                    ),
+                  );
+                  break;
+                case 'logout':
+                  _authService.handleLogout(context);
+                  break;
+              }
+            },
+            itemBuilder:
+                (BuildContext context) => [
+                  const PopupMenuItem<String>(
+                    value: 'cache',
+                    child: ListTile(
+                      leading: Icon(Icons.image),
+                      title: Text('Cache Management'),
+                      contentPadding: EdgeInsets.zero,
+                    ),
+                  ),
+                  const PopupMenuItem<String>(
+                    value: 'logout',
+                    child: ListTile(
+                      leading: Icon(Icons.logout),
+                      title: Text('Logout'),
+                      contentPadding: EdgeInsets.zero,
+                    ),
+                  ),
+                ],
           ),
           const SizedBox(width: 10),
         ],
