@@ -199,9 +199,7 @@ class OfflineOrderService {
         processedCount++;
       }
 
-      print(
-        '✅ Successfully synced ${processedCount} orders to local database',
-      );
+      print('✅ Successfully synced ${processedCount} orders to local database');
       _isOnline = true;
     } catch (e) {
       print('❌ Failed to sync from remote (probably offline): $e');
@@ -240,7 +238,9 @@ class OfflineOrderService {
           print('⏳ Skipping periodic sync - sync already in progress');
         }
       });
-      print('🔄 Periodic sync started (every 5 minutes, started after 30 seconds delay)');
+      print(
+        '🔄 Periodic sync started (every 5 minutes, started after 30 seconds delay)',
+      );
     });
   }
 

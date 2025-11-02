@@ -265,7 +265,9 @@ class DatabaseHelper {
       }
     });
 
-    print('Saved order ${order['id']} to local database with ${order['items']?.length ?? 0} items');
+    print(
+      'Saved order ${order['id']} to local database with ${order['items']?.length ?? 0} items',
+    );
   }
 
   // Get orders with details from local database
