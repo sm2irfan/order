@@ -44,6 +44,11 @@ class _OrderManagementScreenState extends State<OrderManagementScreen> {
   // Real-time subscription for orders table
   late final RealtimeChannel _ordersChannel;
 
+  // Debouncing variables to prevent multiple rapid reloads
+  Timer? _debounceTimer;
+  bool _isUpdating = false;
+  static const Duration _debounceDelay = Duration(milliseconds: 500);
+
   @override
   void initState() {
     super.initState();
@@ -106,9 +111,29 @@ class _OrderManagementScreenState extends State<OrderManagementScreen> {
   void dispose() {
     _searchController.dispose();
     _ordersChannel.unsubscribe();
+    _debounceTimer?.cancel();
     _offlineOrderService.dispose();
     print('🔌 Real-time subscription and offline service cleaned up');
     super.dispose();
+  }
+
+  /// Debounced reload to prevent multiple rapid database calls
+  void _debouncedReload() {
+    if (_isUpdating) {
+      print('⏳ Update already in progress, skipping reload');
+      return;
+    }
+
+    // Cancel existing timer
+    _debounceTimer?.cancel();
+
+    // Start new timer
+    _debounceTimer = Timer(_debounceDelay, () {
+      if (mounted && !_isUpdating) {
+        print('🔄 Debounced reload triggered');
+        _loadOrdersOfflineFirst();
+      }
+    });
   }
 
   /// Setup real-time subscription for orders table
@@ -178,7 +203,7 @@ class _OrderManagementScreenState extends State<OrderManagementScreen> {
 
       // Auto-refresh orders list using offline-first approach
       if (mounted) {
-        _loadOrdersOfflineFirst();
+        _debouncedReload();
       }
     }
   }
@@ -220,7 +245,7 @@ class _OrderManagementScreenState extends State<OrderManagementScreen> {
 
       // Auto-refresh orders list using offline-first approach for status changes
       if (oldStatus != newStatus && mounted) {
-        _loadOrdersOfflineFirst();
+        _debouncedReload();
       }
     }
   }
@@ -248,7 +273,7 @@ class _OrderManagementScreenState extends State<OrderManagementScreen> {
 
       // Auto-refresh orders list using offline-first approach for deletions
       if (mounted) {
-        _loadOrdersOfflineFirst();
+        _debouncedReload();
       }
     }
   }
@@ -444,12 +469,19 @@ class _OrderManagementScreenState extends State<OrderManagementScreen> {
 
   // Method to handle order status changes
   void _handleStatusChange(Order order, String newStatus) async {
+    if (_isUpdating) {
+      print('🚫 Status update already in progress, ignoring duplicate request');
+      return;
+    }
+
+    _isUpdating = true;
     print(
       '🔄 Changing order ${order.id} status from "${order.orderStatus}" to "$newStatus"',
     );
 
     try {
       // Show loading indicator
+      ScaffoldMessenger.of(context).hideCurrentSnackBar();
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Row(
@@ -473,10 +505,34 @@ class _OrderManagementScreenState extends State<OrderManagementScreen> {
       // Update status via offline service (will sync to remote automatically)
       await _offlineOrderService.updateOrderStatus(order.id, newStatus);
 
-      // Refresh orders from local database
-      await _loadOrdersOfflineFirst();
+      // Skip the automatic reload since real-time will handle it
+      // Just update local state for immediate feedback
+      setState(() {
+        final index = _allOrders.indexWhere((o) => o.id == order.id);
+        if (index != -1) {
+          final updatedOrder = Order(
+            id: order.id,
+            userId: order.userId,
+            items: order.items,
+            totalAmount: order.totalAmount,
+            createdAt: order.createdAt,
+            orderStatus: newStatus,
+            paymentMethod: order.paymentMethod,
+            deliveryOption: order.deliveryOption,
+            customerName: order.customerName,
+            customerPhoneNumber: order.customerPhoneNumber,
+            deliveryAddress: order.deliveryAddress,
+            deliveryTimeSlot: order.deliveryTimeSlot,
+            deliveryPartnerName: order.deliveryPartnerName,
+            deliveryPartnerPhone: order.deliveryPartnerPhone,
+          );
+          _allOrders[index] = updatedOrder;
+          _filterOrders();
+        }
+      });
 
-      // Show success message
+      // Hide loading and show success
+      ScaffoldMessenger.of(context).hideCurrentSnackBar();
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text('✅ Order ${order.id} status updated to "$newStatus"'),
@@ -495,6 +551,7 @@ class _OrderManagementScreenState extends State<OrderManagementScreen> {
           e.toString().contains('Invalid JWT')) {
         print('🔐 Authentication error detected during status update');
 
+        ScaffoldMessenger.of(context).hideCurrentSnackBar();
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text('❌ Session expired. Please login again.'),
@@ -515,6 +572,7 @@ class _OrderManagementScreenState extends State<OrderManagementScreen> {
       }
 
       // Show generic error message
+      ScaffoldMessenger.of(context).hideCurrentSnackBar();
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text('❌ Failed to update order status: ${e.toString()}'),
@@ -522,6 +580,8 @@ class _OrderManagementScreenState extends State<OrderManagementScreen> {
           duration: const Duration(seconds: 5),
         ),
       );
+    } finally {
+      _isUpdating = false;
     }
   }
 

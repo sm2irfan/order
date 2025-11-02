@@ -19,18 +19,21 @@ class OfflineOrderService {
 
   // Initialize offline service
   Future<void> initialize() async {
-    if (_isInitialized) return;
+    if (_isInitialized) {
+      print('ℹ️ OfflineOrderService already initialized, skipping...');
+      return;
+    }
 
     print('🔄 Initializing OfflineOrderService...');
 
     // Add small delay to ensure database is ready
     await Future.delayed(const Duration(milliseconds: 100));
 
-    // Start periodic sync
-    _startPeriodicSync();
-
-    // Initial sync from remote to local
+    // Initial sync from remote to local (only once during initialization)
     await syncOrdersFromRemote();
+
+    // Start periodic sync only after initial sync is complete
+    _startPeriodicSync();
 
     _isInitialized = true;
     print('✅ OfflineOrderService initialized');
@@ -157,7 +160,7 @@ class OfflineOrderService {
   // Sync orders from remote to local
   Future<void> syncOrdersFromRemote() async {
     if (_isSyncing) {
-      print('⏳ Sync already in progress...');
+      print('⏳ Sync already in progress, skipping duplicate sync request...');
       return;
     }
 
@@ -178,6 +181,7 @@ class OfflineOrderService {
       print('📥 Received ${remoteOrders.length} orders from remote');
 
       // Save each order to local database
+      int processedCount = 0;
       for (Order order in remoteOrders) {
         Map<String, dynamic> orderData = order.toMap();
 
@@ -192,10 +196,11 @@ class OfflineOrderService {
             }).toList();
 
         await _dbHelper.saveOrderToLocal(orderData);
+        processedCount++;
       }
 
       print(
-        '✅ Successfully synced ${remoteOrders.length} orders to local database',
+        '✅ Successfully synced ${processedCount} orders to local database',
       );
       _isOnline = true;
     } catch (e) {
@@ -225,12 +230,18 @@ class OfflineOrderService {
 
   // Start periodic sync
   void _startPeriodicSync() {
-    _syncTimer = Timer.periodic(const Duration(minutes: 2), (timer) {
-      if (!_isSyncing) {
-        syncOrdersFromRemote();
-      }
+    // Add a longer delay before starting periodic sync to avoid conflicts with initial sync
+    Timer(const Duration(seconds: 30), () {
+      _syncTimer = Timer.periodic(const Duration(minutes: 5), (timer) {
+        if (!_isSyncing) {
+          print('🔄 Periodic sync triggered');
+          syncOrdersFromRemote();
+        } else {
+          print('⏳ Skipping periodic sync - sync already in progress');
+        }
+      });
+      print('🔄 Periodic sync started (every 5 minutes, started after 30 seconds delay)');
     });
-    print('🔄 Periodic sync started (every 2 minutes)');
   }
 
   // Get order status counts

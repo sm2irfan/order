@@ -221,7 +221,7 @@ class DatabaseHelper {
     Database db = await instance.database;
 
     await db.transaction((txn) async {
-      // Insert order
+      // Insert or replace order
       await txn.insert('orders', {
         'id': order['id'],
         'user_id': order['user_id'],
@@ -239,8 +239,17 @@ class DatabaseHelper {
         'delivery_partner_phone': order['delivery_partner_phone'],
       }, conflictAlgorithm: ConflictAlgorithm.replace);
 
-      // Insert order details
+      // Handle order details: First delete existing details, then insert new ones
+      // This prevents duplicate items when syncing the same order multiple times
       if (order['items'] != null) {
+        // Delete existing order details for this order to prevent duplicates
+        await txn.delete(
+          'order_details',
+          where: 'order_id = ?',
+          whereArgs: [order['id']],
+        );
+
+        // Insert fresh order details
         for (var item in order['items']) {
           await txn.insert('order_details', {
             'order_id': order['id'],
@@ -251,12 +260,12 @@ class DatabaseHelper {
             'price': item['price'],
             'created_at': item['created_at'],
             'updated_at': item['updated_at'],
-          }, conflictAlgorithm: ConflictAlgorithm.replace);
+          });
         }
       }
     });
 
-    print('Saved order ${order['id']} to local database');
+    print('Saved order ${order['id']} to local database with ${order['items']?.length ?? 0} items');
   }
 
   // Get orders with details from local database

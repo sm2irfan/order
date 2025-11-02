@@ -123,6 +123,110 @@ class _OrderManagementScreenState extends State<OrderManagementScreen> {
     ).showSnackBar(SnackBar(content: Text('Cancel order feature coming soon')));
   }
 
+  // Optimized status change handler to prevent multiple reloads
+  bool _isUpdatingStatus = false;
+
+  void _handleStatusChange(Order order, String newStatus) async {
+    if (_isUpdatingStatus) {
+      print('🚫 Status update already in progress, ignoring duplicate request');
+      return;
+    }
+
+    _isUpdatingStatus = true;
+    print(
+      '🔄 Changing order ${order.id} status from "${order.orderStatus}" to "$newStatus"',
+    );
+
+    try {
+      // Show loading indicator
+      ScaffoldMessenger.of(context).hideCurrentSnackBar();
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Row(
+            children: [
+              SizedBox(
+                width: 20,
+                height: 20,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2,
+                  valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                ),
+              ),
+              SizedBox(width: 16),
+              Text('Updating order status...'),
+            ],
+          ),
+          duration: Duration(seconds: 2),
+        ),
+      );
+
+      // Update the order locally first for immediate UI feedback
+      final updatedOrder = Order(
+        id: order.id,
+        userId: order.userId,
+        items: order.items,
+        totalAmount: order.totalAmount,
+        createdAt: order.createdAt,
+        orderStatus: newStatus,
+        paymentMethod: order.paymentMethod,
+        deliveryOption: order.deliveryOption,
+        customerName: order.customerName,
+        customerPhoneNumber: order.customerPhoneNumber,
+        deliveryAddress: order.deliveryAddress,
+        deliveryTimeSlot: order.deliveryTimeSlot,
+        deliveryPartnerName: order.deliveryPartnerName,
+        deliveryPartnerPhone: order.deliveryPartnerPhone,
+      );
+
+      // Update the UI immediately to prevent lag
+      setState(() {
+        final index = _allOrders.indexWhere((o) => o.id == order.id);
+        if (index != -1) {
+          _allOrders[index] = updatedOrder;
+          _filterOrders();
+        }
+      });
+
+      // Update via service (this will handle remote sync)
+      final service = SupabaseOrderService();
+      await service.updateOrderStatus(order.id, newStatus);
+
+      // Hide loading and show success
+      ScaffoldMessenger.of(context).hideCurrentSnackBar();
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('✅ Order ${order.id} status updated to "$newStatus"'),
+          backgroundColor: Colors.green,
+          duration: const Duration(seconds: 2),
+        ),
+      );
+
+      print('✅ Order status updated successfully');
+    } catch (e) {
+      print('❌ Error updating order status: $e');
+
+      // Revert the local change on error
+      setState(() {
+        final index = _allOrders.indexWhere((o) => o.id == order.id);
+        if (index != -1) {
+          _allOrders[index] = order; // Revert to original
+          _filterOrders();
+        }
+      });
+
+      ScaffoldMessenger.of(context).hideCurrentSnackBar();
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('❌ Failed to update order status: $e'),
+          backgroundColor: Colors.red,
+          duration: const Duration(seconds: 3),
+        ),
+      );
+    } finally {
+      _isUpdatingStatus = false;
+    }
+  }
+
   Color _getStatusColor(String status) {
     switch (status) {
       case 'Order Placed':
@@ -322,6 +426,7 @@ class _OrderManagementScreenState extends State<OrderManagementScreen> {
                       getStatusColor: _getStatusColor,
                       onOrderUpdate: _modifyOrder,
                       onOrderSelect: _handleOrderSelection,
+                      onStatusChange: _handleStatusChange,
                     ),
           ),
         ],
