@@ -122,6 +122,25 @@ class _DesktopOrderScreenState extends State<DesktopOrderScreen> {
     }
   }
 
+  Color _getStockStatusColor(String? stockQuantity) {
+    if (stockQuantity == null || stockQuantity == 'N/A') {
+      return Colors.grey;
+    }
+    
+    final stock = int.tryParse(stockQuantity);
+    if (stock == null) {
+      return Colors.grey;
+    }
+    
+    if (stock == 0) {
+      return Colors.red; // Out of stock
+    } else if (stock <= 5) {
+      return Colors.orange; // Low stock
+    } else {
+      return Colors.green; // Good stock
+    }
+  }
+
   // Add a method to set the default save location
   Future<void> _setDefaultSaveLocation() async {
     try {
@@ -658,6 +677,16 @@ class _DesktopOrderScreenState extends State<DesktopOrderScreen> {
                         ),
                       ),
                       Expanded(
+                        flex: 1,
+                        child: SelectableText(
+                          'Stock',
+                          style: TextStyle(
+                            fontWeight: FontWeight.bold,
+                            fontSize: 16, // Increased font size
+                          ),
+                        ),
+                      ),
+                      Expanded(
                         flex: 1, // Reduced from 2
                         child: SelectableText(
                           'Price',
@@ -714,6 +743,17 @@ class _DesktopOrderScreenState extends State<DesktopOrderScreen> {
                                   item.unit,
                                   style: const TextStyle(
                                     fontSize: 15, // Increased font size
+                                  ),
+                                ),
+                              ),
+                              Expanded(
+                                flex: 1,
+                                child: SelectableText(
+                                  item.stockQuantity ?? 'N/A',
+                                  style: TextStyle(
+                                    fontSize: 15,
+                                    color: _getStockStatusColor(item.stockQuantity),
+                                    fontWeight: FontWeight.w500,
                                   ),
                                 ),
                               ),

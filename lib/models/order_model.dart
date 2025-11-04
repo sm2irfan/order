@@ -79,6 +79,7 @@ class OrderDetail {
   final String unit;
   final int? discount;
   final double price;
+  final String? stockQuantity; // New field for stock quantity
 
   OrderDetail({
     required this.productId,
@@ -88,6 +89,7 @@ class OrderDetail {
     required this.unit,
     this.discount,
     required this.price,
+    this.stockQuantity, // New field for stock quantity
   });
 
   // Create OrderDetail from Map (from database or API)
@@ -100,6 +102,7 @@ class OrderDetail {
       unit: map['unit'],
       discount: map['discount'],
       price: (map['price'] as num).toDouble(),
+      stockQuantity: map['stock_quantity']?.toString(), // Parse stock quantity
     );
   }
 
@@ -113,6 +116,7 @@ class OrderDetail {
       'unit': unit,
       'discount': discount,
       'price': price,
+      'stock_quantity': stockQuantity, // Include stock quantity in map
     };
   }
 

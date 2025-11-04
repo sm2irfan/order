@@ -68,25 +68,27 @@ class OrderFileExport {
 
       // Item table
       buffer.writeln('ITEMS:');
-      buffer.writeln('-'.padRight(43, '-'));
+      buffer.writeln('-'.padRight(58, '-'));
       buffer.writeln(
         'Product'.padRight(20) +
             'Qty'.padRight(5) +
             'Unit'.padRight(8) +
+            'Stock'.padRight(8) +
             'Price'.padRight(10),
       );
-      buffer.writeln('-'.padRight(43, '-'));
+      buffer.writeln('-'.padRight(58, '-'));
 
       for (var item in order.items) {
         buffer.writeln(
           item.productName.padRight(20) +
               item.quantity.toString().padRight(5) +
               item.unit.padRight(8) +
+              (item.stockQuantity ?? 'N/A').padRight(8) +
               item.price.toStringAsFixed(2).padRight(10),
         );
       }
 
-      buffer.writeln('-'.padRight(43, '-'));
+      buffer.writeln('-'.padRight(58, '-'));
       buffer.writeln('');
 
       // Summary

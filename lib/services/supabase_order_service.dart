@@ -250,12 +250,13 @@ class SupabaseOrderService {
       final String unit = json['unit'] as String;
       final int? discount = json['discount'] as int?;
       final double price = (json['price'] as num).toDouble();
+      final String? stockQuantity = json['stock_quantity']?.toString();
 
       // Calculate unit price for logging
       final unitPrice = price / quantity;
 
       print(
-        '    🛍️  Product $productId: $productName, $quantity $unit @ $unitPrice each (Total: $price)',
+        '    🛍️  Product $productId: $productName, $quantity $unit @ $unitPrice each (Total: $price) [Stock: ${stockQuantity ?? 'N/A'}]',
       );
 
       return OrderDetail(
@@ -266,6 +267,7 @@ class SupabaseOrderService {
         unit: unit,
         discount: discount,
         price: price,
+        stockQuantity: stockQuantity,
       );
     } catch (e) {
       print('💥 Error parsing order detail from JSON: $e');

@@ -604,6 +604,25 @@ class _OrderManagementScreenState extends State<OrderManagementScreen> {
     }
   }
 
+  Color _getStockStatusColor(String? stockQuantity) {
+    if (stockQuantity == null || stockQuantity == 'N/A') {
+      return Colors.grey;
+    }
+    
+    final stock = int.tryParse(stockQuantity);
+    if (stock == null) {
+      return Colors.grey;
+    }
+    
+    if (stock == 0) {
+      return Colors.red; // Out of stock
+    } else if (stock <= 5) {
+      return Colors.orange; // Low stock
+    } else {
+      return Colors.green; // Good stock
+    }
+  }
+
   double _calculateSubtotal(Order order) {
     return order.items.fold(
       0.0,
@@ -800,12 +819,26 @@ class _OrderManagementScreenState extends State<OrderManagementScreen> {
                             fontWeight: FontWeight.w600,
                           ),
                         ),
-                        subtitle: Text(
-                          '${item.quantity} ${item.unit} @ LKR ${unitPrice.toStringAsFixed(2)} each',
-                          style: const TextStyle(
-                            fontSize: 14, // Increased font size
-                            fontWeight: FontWeight.w500,
-                          ),
+                        subtitle: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              '${item.quantity} ${item.unit} @ LKR ${unitPrice.toStringAsFixed(2)} each',
+                              style: const TextStyle(
+                                fontSize: 14, // Increased font size
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
+                            if (item.stockQuantity != null)
+                              Text(
+                                'Stock: ${item.stockQuantity}',
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  color: _getStockStatusColor(item.stockQuantity),
+                                  fontWeight: FontWeight.w500,
+                                ),
+                              ),
+                          ],
                         ),
                         trailing: Text(
                           'LKR ${totalPrice.toStringAsFixed(2)}',
