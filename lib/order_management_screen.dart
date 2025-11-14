@@ -6,7 +6,6 @@ import 'package:order_management/screens/mobile_order_screen.dart';
 import 'package:order_management/screens/cache_management_screen.dart';
 import 'package:order_management/services/auth_service.dart';
 import 'package:order_management/services/supabase_order_service.dart';
-import 'package:order_management/services/offline_order_service.dart';
 import 'package:order_management/services/image_cache_service.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:order_management/main.dart';
@@ -39,7 +38,7 @@ class _OrderManagementScreenState extends State<OrderManagementScreen> {
 
   bool _isLoading = false;
   final AuthService _authService = AuthService.instance;
-  final OfflineOrderService _offlineOrderService = OfflineOrderService();
+  final SupabaseOrderService _orderService = SupabaseOrderService();
 
   // Real-time subscription for orders table
   late final RealtimeChannel _ordersChannel;
@@ -59,33 +58,31 @@ class _OrderManagementScreenState extends State<OrderManagementScreen> {
     print('👂 Search controller listener added');
   }
 
-  // Initialize offline service and load orders
+  // Initialize and load orders
   Future<void> _initializeOfflineService() async {
-    print('🚀 Initializing offline service and loading orders...');
+    print('🚀 Initializing and loading orders...');
 
     try {
-      // Initialize offline service
-      await _offlineOrderService.initialize();
-
-      // Load orders using offline-first approach
-      await _loadOrdersOfflineFirst();
+      // Load orders directly from Supabase
+      await _loadOrdersFromSupabase();
     } catch (e) {
-      print('💥 Error initializing offline service: $e');
-      // Fallback to online loading
-      _loadOrdersFromSupabase();
+      print('💥 Error loading orders: $e');
+      setState(() {
+        _isLoading = false;
+      });
     }
   }
 
-  // Load orders using offline-first approach
+  // Load orders from Supabase
   Future<void> _loadOrdersOfflineFirst() async {
-    print('📱 Loading orders from local database (offline-first)...');
+    print('📱 Loading orders from Supabase...');
 
     setState(() {
       _isLoading = true;
     });
 
     try {
-      List<Order> orders = await _offlineOrderService.getOrders();
+      List<Order> orders = await _orderService.fetchOrders();
 
       setState(() {
         _allOrders = orders;
@@ -112,8 +109,7 @@ class _OrderManagementScreenState extends State<OrderManagementScreen> {
     _searchController.dispose();
     _ordersChannel.unsubscribe();
     _debounceTimer?.cancel();
-    _offlineOrderService.dispose();
-    print('🔌 Real-time subscription and offline service cleaned up');
+    print('🔌 Real-time subscription cleaned up');
     super.dispose();
   }
 
@@ -502,8 +498,8 @@ class _OrderManagementScreenState extends State<OrderManagementScreen> {
         ),
       );
 
-      // Update status via offline service (will sync to remote automatically)
-      await _offlineOrderService.updateOrderStatus(order.id, newStatus);
+      // Update status via Supabase service
+      await _orderService.updateOrderStatus(order.id, newStatus);
 
       // Skip the automatic reload since real-time will handle it
       // Just update local state for immediate feedback
@@ -836,6 +832,15 @@ class _OrderManagementScreenState extends State<OrderManagementScreen> {
                                   fontSize: 12,
                                   color: _getStockStatusColor(item.stockQuantity),
                                   fontWeight: FontWeight.w500,
+                                ),
+                              ),
+                            if (item.profit != null)
+                              Text(
+                                'Profit: LKR ${item.profit!.toStringAsFixed(2)}',
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  color: item.profit! > 0 ? Colors.green : Colors.grey,
+                                  fontWeight: FontWeight.w600,
                                 ),
                               ),
                           ],

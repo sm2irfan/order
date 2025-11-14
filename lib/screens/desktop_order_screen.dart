@@ -696,6 +696,16 @@ class _DesktopOrderScreenState extends State<DesktopOrderScreen> {
                           ),
                         ),
                       ),
+                      Expanded(
+                        flex: 1,
+                        child: SelectableText(
+                          'Profit',
+                          style: TextStyle(
+                            fontWeight: FontWeight.bold,
+                            fontSize: 16,
+                          ),
+                        ),
+                      ),
                     ],
                   ),
                   const Divider(height: 24),
@@ -767,6 +777,21 @@ class _DesktopOrderScreenState extends State<DesktopOrderScreen> {
                                   ),
                                 ),
                               ),
+                              Expanded(
+                                flex: 1,
+                                child: SelectableText(
+                                  item.profit != null 
+                                      ? '${item.profit!.toStringAsFixed(0)} Rs'
+                                      : 'N/A',
+                                  style: TextStyle(
+                                    fontSize: 15,
+                                    fontWeight: FontWeight.w600,
+                                    color: item.profit != null && item.profit! > 0
+                                        ? Colors.green
+                                        : Colors.grey,
+                                  ),
+                                ),
+                              ),
                             ],
                           ),
                         ),
@@ -794,7 +819,7 @@ class _DesktopOrderScreenState extends State<DesktopOrderScreen> {
                   const SizedBox(height: 8),
                   Row(
                     children: [
-                      const Spacer(flex: 5),
+                      const Spacer(flex: 6), // Updated from 5 to 6 to match new column count (2+1+1+1+1+1=7, total with spacer should balance)
                       const Expanded(
                         flex: 2,
                         child: SelectableText(
@@ -822,8 +847,8 @@ class _DesktopOrderScreenState extends State<DesktopOrderScreen> {
                   Row(
                     children: [
                       const Spacer(
-                        flex: 5,
-                      ), // Adjust spacer flex if needed based on new item flex sum (2+1+1+1=5)
+                        flex: 6,
+                      ), // Updated from 5 to 6 to match new column count (2+1+1+1+1+1=7)
                       const Expanded(
                         flex: 2,
                         child: SelectableText(

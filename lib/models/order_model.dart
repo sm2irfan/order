@@ -80,6 +80,7 @@ class OrderDetail {
   final int? discount;
   final double price;
   final String? stockQuantity; // New field for stock quantity
+  final double? profit; // New field for profit
 
   OrderDetail({
     required this.productId,
@@ -90,6 +91,7 @@ class OrderDetail {
     this.discount,
     required this.price,
     this.stockQuantity, // New field for stock quantity
+    this.profit, // New field for profit
   });
 
   // Create OrderDetail from Map (from database or API)
@@ -103,6 +105,7 @@ class OrderDetail {
       discount: map['discount'],
       price: (map['price'] as num).toDouble(),
       stockQuantity: map['stock_quantity']?.toString(), // Parse stock quantity
+      profit: map['profit'] != null ? (map['profit'] as num).toDouble() : null, // Parse profit
     );
   }
 
@@ -117,6 +120,7 @@ class OrderDetail {
       'discount': discount,
       'price': price,
       'stock_quantity': stockQuantity, // Include stock quantity in map
+      'profit': profit, // Include profit in map
     };
   }
 
