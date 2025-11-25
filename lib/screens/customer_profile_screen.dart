@@ -1,5 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:image_picker/image_picker.dart';
+import 'package:flutter_image_compress/flutter_image_compress.dart';
+import 'dart:io';
+import 'package:path/path.dart' as path;
 
 class CustomerProfileScreen extends StatefulWidget {
   const CustomerProfileScreen({super.key});
@@ -18,6 +22,8 @@ class _CustomerProfileScreenState extends State<CustomerProfileScreen> {
   bool _isLoading = false;
   bool _isEditing = false;
   String? _errorMessage;
+  File? _selectedImage;
+  final ImagePicker _imagePicker = ImagePicker();
 
   @override
   void dispose() {
@@ -48,7 +54,7 @@ class _CustomerProfileScreenState extends State<CustomerProfileScreen> {
       
       final response = await supabase
           .from('profiles')
-          .select('id, full_name, address, phone_number, link, geographic_coordinates')
+          .select('id, full_name, address, phone_number, link, geographic_coordinates, gate_image')
           .eq('profile_number', int.parse(profileNumber))
           .single();
 
@@ -56,6 +62,7 @@ class _CustomerProfileScreenState extends State<CustomerProfileScreen> {
         _profileData = response;
         _linkController.text = response['link'] ?? '';
         _geographicCoordinatesController.text = response['geographic_coordinates'] ?? '';
+        _selectedImage = null; // Reset selected image
         _isLoading = false;
       });
 
@@ -122,6 +129,193 @@ class _CustomerProfileScreenState extends State<CustomerProfileScreen> {
       
       print('❌ Error updating profile: $e');
     }
+  }
+
+  // Pick image from gallery or camera
+  Future<void> _pickImage(ImageSource source) async {
+    try {
+      final XFile? pickedFile = await _imagePicker.pickImage(
+        source: source,
+        maxWidth: 1920,
+        maxHeight: 1080,
+        imageQuality: 85,
+      );
+
+      if (pickedFile != null) {
+        setState(() {
+          _selectedImage = File(pickedFile.path);
+        });
+        print('✅ Image selected: ${pickedFile.path}');
+      }
+    } catch (e) {
+      print('❌ Error picking image: $e');
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Error picking image: $e'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
+  }
+
+  // Compress image to reduce file size
+  Future<File?> _compressImage(File file) async {
+    try {
+      print('🔄 Compressing image...');
+      final String targetPath = path.join(
+        path.dirname(file.path),
+        '${path.basenameWithoutExtension(file.path)}_compressed${path.extension(file.path)}',
+      );
+
+      final XFile? compressedFile = await FlutterImageCompress.compressAndGetFile(
+        file.absolute.path,
+        targetPath,
+        quality: 70,
+        minWidth: 800,
+        minHeight: 600,
+      );
+
+      if (compressedFile != null) {
+        final originalSize = await file.length();
+        final compressedSize = await File(compressedFile.path).length();
+        print('✅ Image compressed: ${(originalSize / 1024).toStringAsFixed(2)} KB → ${(compressedSize / 1024).toStringAsFixed(2)} KB');
+        return File(compressedFile.path);
+      }
+      return null;
+    } catch (e) {
+      print('❌ Error compressing image: $e');
+      return file; // Return original if compression fails
+    }
+  }
+
+  // Upload image to Supabase storage
+  Future<String?> _uploadImageToStorage(File imageFile) async {
+    try {
+      print('📤 Uploading image to Supabase storage...');
+      
+      final supabase = Supabase.instance.client;
+      final String fileName = '${_profileData!['id']}_${DateTime.now().millisecondsSinceEpoch}${path.extension(imageFile.path)}';
+      final String filePath = fileName;
+
+      // Upload to Supabase storage
+      await supabase.storage
+          .from('customer_profile')
+          .upload(
+            filePath,
+            imageFile,
+            fileOptions: const FileOptions(
+              cacheControl: '3600',
+              upsert: true,
+            ),
+          );
+
+      // Get public URL
+      final String publicUrl = supabase.storage
+          .from('customer_profile')
+          .getPublicUrl(filePath);
+
+      print('✅ Image uploaded successfully: $publicUrl');
+      return publicUrl;
+    } catch (e) {
+      print('❌ Error uploading image: $e');
+      throw Exception('Failed to upload image: $e');
+    }
+  }
+
+  // Save gate image
+  Future<void> _saveGateImage() async {
+    if (_selectedImage == null || _profileData == null) return;
+
+    setState(() {
+      _isLoading = true;
+      _errorMessage = null;
+    });
+
+    try {
+      // Compress image
+      final compressedImage = await _compressImage(_selectedImage!);
+      if (compressedImage == null) {
+        throw Exception('Failed to compress image');
+      }
+
+      // Upload to storage
+      final imageUrl = await _uploadImageToStorage(compressedImage);
+      if (imageUrl == null) {
+        throw Exception('Failed to upload image');
+      }
+
+      // Update database
+      final supabase = Supabase.instance.client;
+      await supabase
+          .from('profiles')
+          .update({
+            'gate_image': imageUrl,
+            'updated_at': DateTime.now().toIso8601String(),
+          })
+          .eq('id', _profileData!['id']);
+
+      setState(() {
+        _profileData!['gate_image'] = imageUrl;
+        _selectedImage = null;
+        _isLoading = false;
+      });
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Gate image uploaded successfully'),
+          backgroundColor: Colors.green,
+        ),
+      );
+
+      print('✅ Gate image saved successfully');
+    } catch (e) {
+      setState(() {
+        _isLoading = false;
+        _errorMessage = 'Error uploading image: $e';
+      });
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Error uploading image: $e'),
+          backgroundColor: Colors.red,
+        ),
+      );
+
+      print('❌ Error saving gate image: $e');
+    }
+  }
+
+  // Show image source selection dialog
+  Future<void> _showImageSourceDialog() async {
+    await showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: const Text('Select Image Source'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              ListTile(
+                leading: const Icon(Icons.camera_alt),
+                title: const Text('Camera'),
+                onTap: () {
+                  Navigator.pop(context);
+                  _pickImage(ImageSource.camera);
+                },
+              ),
+              ListTile(
+                leading: const Icon(Icons.photo_library),
+                title: const Text('Gallery'),
+                onTap: () {
+                  Navigator.pop(context);
+                  _pickImage(ImageSource.gallery);
+                },
+              ),
+            ],
+          ),
+        );
+      },
+    );
   }
 
   String _formatAddress(dynamic address) {
@@ -337,6 +531,130 @@ class _CustomerProfileScreenState extends State<CustomerProfileScreen> {
                             ),
                           ),
                         ],
+
+                        // Gate Image Section
+                        const SizedBox(height: 24),
+                        const Divider(),
+                        const SizedBox(height: 16),
+                        const Text(
+                          'Gate Image',
+                          style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.blue,
+                          ),
+                        ),
+                        const SizedBox(height: 16),
+
+                        // Display existing gate image or selected image
+                        if (_profileData!['gate_image'] != null || _selectedImage != null) ...[
+                          Container(
+                            height: 250,
+                            width: double.infinity,
+                            decoration: BoxDecoration(
+                              border: Border.all(color: Colors.grey[300]!),
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: ClipRRect(
+                              borderRadius: BorderRadius.circular(8),
+                              child: _selectedImage != null
+                                  ? Image.file(
+                                      _selectedImage!,
+                                      fit: BoxFit.cover,
+                                    )
+                                  : Image.network(
+                                      _profileData!['gate_image'],
+                                      fit: BoxFit.cover,
+                                      loadingBuilder: (context, child, loadingProgress) {
+                                        if (loadingProgress == null) return child;
+                                        return Center(
+                                          child: CircularProgressIndicator(
+                                            value: loadingProgress.expectedTotalBytes != null
+                                                ? loadingProgress.cumulativeBytesLoaded /
+                                                    loadingProgress.expectedTotalBytes!
+                                                : null,
+                                          ),
+                                        );
+                                      },
+                                      errorBuilder: (context, error, stackTrace) {
+                                        return const Center(
+                                          child: Column(
+                                            mainAxisAlignment: MainAxisAlignment.center,
+                                            children: [
+                                              Icon(Icons.error_outline, size: 48, color: Colors.red),
+                                              SizedBox(height: 8),
+                                              Text('Failed to load image'),
+                                            ],
+                                          ),
+                                        );
+                                      },
+                                    ),
+                            ),
+                          ),
+                          const SizedBox(height: 16),
+                        ] else ...[
+                          Container(
+                            height: 200,
+                            width: double.infinity,
+                            decoration: BoxDecoration(
+                              border: Border.all(color: Colors.grey[300]!, width: 2, style: BorderStyle.solid),
+                              borderRadius: BorderRadius.circular(8),
+                              color: Colors.grey[100],
+                            ),
+                            child: const Column(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Icon(Icons.image_outlined, size: 64, color: Colors.grey),
+                                SizedBox(height: 8),
+                                Text(
+                                  'No gate image uploaded',
+                                  style: TextStyle(color: Colors.grey, fontSize: 16),
+                                ),
+                              ],
+                            ),
+                          ),
+                          const SizedBox(height: 16),
+                        ],
+
+                        // Image action buttons
+                        Row(
+                          children: [
+                            Expanded(
+                              child: OutlinedButton.icon(
+                                onPressed: _isLoading ? null : _showImageSourceDialog,
+                                icon: const Icon(Icons.add_photo_alternate),
+                                label: Text(_selectedImage != null ? 'Change Image' : 'Select Image'),
+                                style: OutlinedButton.styleFrom(
+                                  padding: const EdgeInsets.all(12),
+                                ),
+                              ),
+                            ),
+                            if (_selectedImage != null) ...[
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: ElevatedButton.icon(
+                                  onPressed: _isLoading ? null : _saveGateImage,
+                                  icon: _isLoading
+                                      ? const SizedBox(
+                                          width: 20,
+                                          height: 20,
+                                          child: CircularProgressIndicator(
+                                            strokeWidth: 2,
+                                            valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                                          ),
+                                        )
+                                      : const Icon(Icons.cloud_upload),
+                                  label: const Text('Upload'),
+                                  style: ElevatedButton.styleFrom(
+                                    padding: const EdgeInsets.all(12),
+                                    backgroundColor: Colors.blue,
+                                    foregroundColor: Colors.white,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ],
+                        ),
                       ],
                     ),
                   ),
