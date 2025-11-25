@@ -5,6 +5,7 @@ import 'package:order_management/utils/file_export_utils.dart';
 import 'package:order_management/screens/desktop_order_screen_component/order_status.dart'; // Add this import
 import 'package:order_management/services/image_cache_service.dart';
 import 'package:process_run/shell.dart';
+import 'package:url_launcher/url_launcher.dart';
 import 'dart:io';
 
 class DesktopOrderScreen extends StatefulWidget {
@@ -90,6 +91,69 @@ class _DesktopOrderScreenState extends State<DesktopOrderScreen> {
         ],
       ),
     );
+  }
+
+  // Method to build a clickable link row
+  Widget _buildLinkRow(String label, String link) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4.0),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SizedBox(
+            width: 120,
+            child: SelectableText(
+              label,
+              style: const TextStyle(
+                fontWeight: FontWeight.w500,
+                fontSize: 16,
+              ),
+            ),
+          ),
+          Expanded(
+            child: GestureDetector(
+              onTap: () => _openLink(link),
+              child: Text(
+                link,
+                style: const TextStyle(
+                  fontSize: 16,
+                  color: Colors.blue,
+                  decoration: TextDecoration.underline,
+                  fontWeight: FontWeight.w500,
+                ),
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // Method to open link in browser
+  Future<void> _openLink(String link) async {
+    try {
+      final uri = Uri.parse(link);
+      if (await canLaunchUrl(uri)) {
+        await launchUrl(uri, mode: LaunchMode.externalApplication);
+        print('✅ Opened link: $link');
+      } else {
+        print('❌ Could not launch link: $link');
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Could not open link: $link')),
+          );
+        }
+      }
+    } catch (e) {
+      print('💥 Error opening link: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error opening link: $e')),
+        );
+      }
+    }
   }
 
   @override
@@ -577,6 +641,12 @@ class _DesktopOrderScreenState extends State<DesktopOrderScreen> {
                 widget.buildDetailRow('Name', order.customerName!),
               if (order.customerPhoneNumber != null)
                 _buildPhoneRow('Phone', order.customerPhoneNumber!),
+              if (order.profileNumber != null)
+                widget.buildDetailRow('Profile #', order.profileNumber.toString()),
+              if (order.link != null)
+                _buildLinkRow('Link', order.link!),
+              if (order.geographicCoordinates != null)
+                widget.buildDetailRow('Coordinates', order.geographicCoordinates!),
               if (order.customerName == null &&
                   order.customerPhoneNumber == null &&
                   order.userId != null)

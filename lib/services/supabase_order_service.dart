@@ -127,11 +127,19 @@ class SupabaseOrderService {
       // Parse customer profile
       String? customerName;
       String? customerPhoneNumber;
+      String? link;
+      String? geographicCoordinates;
+      int? profileNumber;
       if (json['profile'] != null) {
         final profile = json['profile'] as Map<String, dynamic>;
         customerName = profile['full_name'] as String?;
         customerPhoneNumber = profile['phone_number'] as String?;
-        print('👤 Customer: $customerName ($customerPhoneNumber)');
+        link = profile['link'] as String?;
+        geographicCoordinates = profile['geographic_coordinates'] as String?;
+        profileNumber = profile['profile_number'] as int?;
+        print('👤 Customer: $customerName ($customerPhoneNumber) [Profile #$profileNumber]');
+        if (link != null) print('🔗 Link: $link');
+        if (geographicCoordinates != null) print('📍 Coordinates: $geographicCoordinates');
       } else {
         print('⚠️  No profile found for order ${json['id']}');
       }
@@ -151,6 +159,9 @@ class SupabaseOrderService {
         userId: json['user_id'] as String?,
         customerName: customerName,
         customerPhoneNumber: customerPhoneNumber,
+        link: link,
+        geographicCoordinates: geographicCoordinates,
+        profileNumber: profileNumber,
         totalAmount: (json['total_amount'] as num).toDouble(),
         deliveryOption: json['delivery_option'] as String,
         deliveryAddress: json['delivery_address'] as String?,

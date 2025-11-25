@@ -4,6 +4,7 @@ import 'package:order_management/models/order_model.dart';
 import 'package:order_management/screens/desktop_order_screen.dart';
 import 'package:order_management/screens/mobile_order_screen.dart';
 import 'package:order_management/screens/cache_management_screen.dart';
+import 'package:order_management/screens/customer_profile_screen.dart';
 import 'package:order_management/services/auth_service.dart';
 import 'package:order_management/services/supabase_order_service.dart';
 import 'package:order_management/services/image_cache_service.dart';
@@ -733,6 +734,69 @@ class _OrderManagementScreenState extends State<OrderManagementScreen> {
     );
   }
 
+  // Method to build a clickable link row
+  Widget _buildLinkRow(String label, String link) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4.0),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SizedBox(
+            width: 120,
+            child: SelectableText(
+              label,
+              style: const TextStyle(
+                fontWeight: FontWeight.w500,
+                fontSize: 16,
+              ),
+            ),
+          ),
+          Expanded(
+            child: GestureDetector(
+              onTap: () => _openLink(link),
+              child: Text(
+                link,
+                style: const TextStyle(
+                  fontSize: 16,
+                  color: Colors.blue,
+                  decoration: TextDecoration.underline,
+                  fontWeight: FontWeight.w500,
+                ),
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // Method to open link in browser
+  Future<void> _openLink(String link) async {
+    try {
+      final uri = Uri.parse(link);
+      if (await canLaunchUrl(uri)) {
+        await launchUrl(uri, mode: LaunchMode.externalApplication);
+        print('✅ Opened link: $link');
+      } else {
+        print('❌ Could not launch link: $link');
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Could not open link: $link')),
+          );
+        }
+      }
+    } catch (e) {
+      print('💥 Error opening link: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error opening link: $e')),
+        );
+      }
+    }
+  }
+
   // Method to handle status filter changes in mobile view
   void _handleStatusFilterChange(String? newValue) {
     setState(() {
@@ -769,6 +833,12 @@ class _OrderManagementScreenState extends State<OrderManagementScreen> {
                     _buildDetailRow('Customer:', order.customerName!),
                   if (order.customerPhoneNumber != null)
                     _buildPhoneRow('Phone:', order.customerPhoneNumber!),
+                  if (order.profileNumber != null)
+                    _buildDetailRow('Profile #:', order.profileNumber.toString()),
+                  if (order.link != null)
+                    _buildLinkRow('Link:', order.link!),
+                  if (order.geographicCoordinates != null)
+                    _buildDetailRow('Coordinates:', order.geographicCoordinates!),
                   _buildDetailRow('Payment:', order.paymentMethod),
                   _buildDetailRow('Delivery:', order.deliveryOption),
                   if (order.deliveryTimeSlot != null)
@@ -988,6 +1058,13 @@ class _OrderManagementScreenState extends State<OrderManagementScreen> {
             icon: const Icon(Icons.more_vert),
             onSelected: (String value) {
               switch (value) {
+                case 'customer_profile':
+                  Navigator.of(context).push(
+                    MaterialPageRoute(
+                      builder: (context) => const CustomerProfileScreen(),
+                    ),
+                  );
+                  break;
                 case 'cache':
                   Navigator.of(context).push(
                     MaterialPageRoute(
@@ -1002,6 +1079,14 @@ class _OrderManagementScreenState extends State<OrderManagementScreen> {
             },
             itemBuilder:
                 (BuildContext context) => [
+                  const PopupMenuItem<String>(
+                    value: 'customer_profile',
+                    child: ListTile(
+                      leading: Icon(Icons.person),
+                      title: Text('Customer Profile'),
+                      contentPadding: EdgeInsets.zero,
+                    ),
+                  ),
                   const PopupMenuItem<String>(
                     value: 'cache',
                     child: ListTile(

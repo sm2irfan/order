@@ -3,6 +3,9 @@ class Order {
   final String? userId;
   final String? customerName; // New field
   final String? customerPhoneNumber; // New field
+  final String? link; // Customer profile link
+  final String? geographicCoordinates; // Customer geographic coordinates
+  final int? profileNumber; // Customer profile number
   final double totalAmount;
   final String deliveryOption;
   final String? deliveryAddress;
@@ -19,6 +22,9 @@ class Order {
     this.userId,
     this.customerName, // New field
     this.customerPhoneNumber, // New field
+    this.link, // Customer profile link
+    this.geographicCoordinates, // Customer geographic coordinates
+    this.profileNumber, // Customer profile number
     required this.totalAmount,
     required this.deliveryOption,
     this.deliveryAddress,
@@ -38,6 +44,9 @@ class Order {
       userId: map['user_id'],
       customerName: map['customer_name'],
       customerPhoneNumber: map['customer_phone_number'],
+      link: map['link'],
+      geographicCoordinates: map['geographic_coordinates'],
+      profileNumber: map['profile_number'],
       totalAmount: (map['total_amount'] as num).toDouble(),
       deliveryOption: map['delivery_option'],
       deliveryAddress: map['delivery_address'],
@@ -58,6 +67,9 @@ class Order {
       'user_id': userId,
       'customer_name': customerName,
       'customer_phone_number': customerPhoneNumber,
+      'link': link,
+      'geographic_coordinates': geographicCoordinates,
+      'profile_number': profileNumber,
       'total_amount': totalAmount,
       'delivery_option': deliveryOption,
       'delivery_address': deliveryAddress,
