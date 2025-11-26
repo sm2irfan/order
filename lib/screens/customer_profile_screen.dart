@@ -6,16 +6,20 @@ import 'dart:io';
 import 'package:path/path.dart' as path;
 
 class CustomerProfileScreen extends StatefulWidget {
-  const CustomerProfileScreen({super.key});
+  final int? initialProfileNumber;
+
+  const CustomerProfileScreen({super.key, this.initialProfileNumber});
 
   @override
   State<CustomerProfileScreen> createState() => _CustomerProfileScreenState();
 }
 
 class _CustomerProfileScreenState extends State<CustomerProfileScreen> {
-  final TextEditingController _profileNumberController = TextEditingController();
+  final TextEditingController _profileNumberController =
+      TextEditingController();
   final TextEditingController _linkController = TextEditingController();
-  final TextEditingController _geographicCoordinatesController = TextEditingController();
+  final TextEditingController _geographicCoordinatesController =
+      TextEditingController();
   final _formKey = GlobalKey<FormState>();
 
   Map<String, dynamic>? _profileData;
@@ -24,6 +28,19 @@ class _CustomerProfileScreenState extends State<CustomerProfileScreen> {
   String? _errorMessage;
   File? _selectedImage;
   final ImagePicker _imagePicker = ImagePicker();
+
+  @override
+  void initState() {
+    super.initState();
+    // If initial profile number is provided, set it and fetch profile
+    if (widget.initialProfileNumber != null) {
+      _profileNumberController.text = widget.initialProfileNumber.toString();
+      // Fetch profile after the widget is built
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _fetchProfile();
+      });
+    }
+  }
 
   @override
   void dispose() {
@@ -35,7 +52,7 @@ class _CustomerProfileScreenState extends State<CustomerProfileScreen> {
 
   Future<void> _fetchProfile() async {
     final profileNumber = _profileNumberController.text.trim();
-    
+
     if (profileNumber.isEmpty) {
       setState(() {
         _errorMessage = 'Please enter a profile number';
@@ -51,17 +68,21 @@ class _CustomerProfileScreenState extends State<CustomerProfileScreen> {
 
     try {
       final supabase = Supabase.instance.client;
-      
-      final response = await supabase
-          .from('profiles')
-          .select('id, full_name, address, phone_number, link, geographic_coordinates, gate_image')
-          .eq('profile_number', int.parse(profileNumber))
-          .single();
+
+      final response =
+          await supabase
+              .from('profiles')
+              .select(
+                'id, full_name, address, phone_number, link, geographic_coordinates, gate_image',
+              )
+              .eq('profile_number', int.parse(profileNumber))
+              .single();
 
       setState(() {
         _profileData = response;
         _linkController.text = response['link'] ?? '';
-        _geographicCoordinatesController.text = response['geographic_coordinates'] ?? '';
+        _geographicCoordinatesController.text =
+            response['geographic_coordinates'] ?? '';
         _selectedImage = null; // Reset selected image
         _isLoading = false;
       });
@@ -86,14 +107,18 @@ class _CustomerProfileScreenState extends State<CustomerProfileScreen> {
 
     try {
       final supabase = Supabase.instance.client;
-      
+
       await supabase
           .from('profiles')
           .update({
-            'link': _linkController.text.trim().isEmpty ? null : _linkController.text.trim(),
-            'geographic_coordinates': _geographicCoordinatesController.text.trim().isEmpty 
-                ? null 
-                : _geographicCoordinatesController.text.trim(),
+            'link':
+                _linkController.text.trim().isEmpty
+                    ? null
+                    : _linkController.text.trim(),
+            'geographic_coordinates':
+                _geographicCoordinatesController.text.trim().isEmpty
+                    ? null
+                    : _geographicCoordinatesController.text.trim(),
             'updated_at': DateTime.now().toIso8601String(),
           })
           .eq('id', _profileData!['id']);
@@ -111,7 +136,7 @@ class _CustomerProfileScreenState extends State<CustomerProfileScreen> {
       );
 
       print('✅ Profile updated successfully');
-      
+
       // Refresh the profile data
       await _fetchProfile();
     } catch (e) {
@@ -119,14 +144,14 @@ class _CustomerProfileScreenState extends State<CustomerProfileScreen> {
         _isLoading = false;
         _errorMessage = 'Error updating profile: $e';
       });
-      
+
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text('Error updating profile: $e'),
           backgroundColor: Colors.red,
         ),
       );
-      
+
       print('❌ Error updating profile: $e');
     }
   }
@@ -158,7 +183,7 @@ class _CustomerProfileScreenState extends State<CustomerProfileScreen> {
     }
   }
 
-  // Compress image to reduce file size
+  // Compress image to reduce file size below 100KB
   Future<File?> _compressImage(File file) async {
     try {
       print('🔄 Compressing image...');
@@ -167,21 +192,55 @@ class _CustomerProfileScreenState extends State<CustomerProfileScreen> {
         '${path.basenameWithoutExtension(file.path)}_compressed${path.extension(file.path)}',
       );
 
-      final XFile? compressedFile = await FlutterImageCompress.compressAndGetFile(
-        file.absolute.path,
-        targetPath,
-        quality: 70,
-        minWidth: 800,
-        minHeight: 600,
-      );
+      const int maxSizeInBytes = 100 * 1024; // 100KB
+      int quality = 85;
+      int minWidth = 1200;
+      int minHeight = 900;
+      File? compressedFile;
 
-      if (compressedFile != null) {
-        final originalSize = await file.length();
-        final compressedSize = await File(compressedFile.path).length();
-        print('✅ Image compressed: ${(originalSize / 1024).toStringAsFixed(2)} KB → ${(compressedSize / 1024).toStringAsFixed(2)} KB');
-        return File(compressedFile.path);
+      // Iteratively compress until file size is below 100KB
+      while (quality >= 10) {
+        final XFile? result = await FlutterImageCompress.compressAndGetFile(
+          file.absolute.path,
+          targetPath,
+          quality: quality,
+          minWidth: minWidth,
+          minHeight: minHeight,
+        );
+
+        if (result != null) {
+          compressedFile = File(result.path);
+          final fileSize = await compressedFile.length();
+
+          print(
+            '🔄 Compression attempt: quality=$quality, size=${(fileSize / 1024).toStringAsFixed(2)} KB',
+          );
+
+          if (fileSize <= maxSizeInBytes) {
+            final originalSize = await file.length();
+            print(
+              '✅ Image compressed successfully: ${(originalSize / 1024).toStringAsFixed(2)} KB → ${(fileSize / 1024).toStringAsFixed(2)} KB',
+            );
+            return compressedFile;
+          }
+
+          // Reduce quality and dimensions for next iteration
+          quality -= 15;
+          minWidth = (minWidth * 0.8).toInt();
+          minHeight = (minHeight * 0.8).toInt();
+
+          // Delete the oversized compressed file
+          await compressedFile.delete();
+        } else {
+          break;
+        }
       }
-      return null;
+
+      // If we couldn't compress below 100KB, return the last attempt
+      print(
+        '⚠️ Warning: Could not compress image below 100KB. Returning best effort.',
+      );
+      return compressedFile ?? file;
     } catch (e) {
       print('❌ Error compressing image: $e');
       return file; // Return original if compression fails
@@ -192,9 +251,10 @@ class _CustomerProfileScreenState extends State<CustomerProfileScreen> {
   Future<String?> _uploadImageToStorage(File imageFile) async {
     try {
       print('📤 Uploading image to Supabase storage...');
-      
+
       final supabase = Supabase.instance.client;
-      final String fileName = '${_profileData!['id']}_${DateTime.now().millisecondsSinceEpoch}${path.extension(imageFile.path)}';
+      final String fileName =
+          '${_profileData!['id']}_${DateTime.now().millisecondsSinceEpoch}${path.extension(imageFile.path)}';
       final String filePath = fileName;
 
       // Upload to Supabase storage
@@ -203,10 +263,7 @@ class _CustomerProfileScreenState extends State<CustomerProfileScreen> {
           .upload(
             filePath,
             imageFile,
-            fileOptions: const FileOptions(
-              cacheControl: '3600',
-              upsert: true,
-            ),
+            fileOptions: const FileOptions(cacheControl: '3600', upsert: true),
           );
 
       // Get public URL
@@ -318,11 +375,110 @@ class _CustomerProfileScreenState extends State<CustomerProfileScreen> {
     );
   }
 
+  // Show full-size image when tapped
+  void _showFullSizeImage(
+    BuildContext context, {
+    String? imageUrl,
+    File? imageFile,
+  }) {
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder:
+            (context) => Scaffold(
+              backgroundColor: Colors.black,
+              body: Stack(
+                children: [
+                  Center(
+                    child: InteractiveViewer(
+                      minScale: 0.5,
+                      maxScale: 4.0,
+                      child:
+                          imageFile != null
+                              ? Image.file(
+                                imageFile,
+                                fit: BoxFit.contain,
+                                width: double.infinity,
+                                height: double.infinity,
+                              )
+                              : Image.network(
+                                imageUrl!,
+                                fit: BoxFit.contain,
+                                width: double.infinity,
+                                height: double.infinity,
+                                loadingBuilder: (
+                                  context,
+                                  child,
+                                  loadingProgress,
+                                ) {
+                                  if (loadingProgress == null) return child;
+                                  return Center(
+                                    child: CircularProgressIndicator(
+                                      value:
+                                          loadingProgress.expectedTotalBytes !=
+                                                  null
+                                              ? loadingProgress
+                                                      .cumulativeBytesLoaded /
+                                                  loadingProgress
+                                                      .expectedTotalBytes!
+                                              : null,
+                                      color: Colors.white,
+                                    ),
+                                  );
+                                },
+                                errorBuilder: (context, error, stackTrace) {
+                                  return const Center(
+                                    child: Column(
+                                      mainAxisAlignment:
+                                          MainAxisAlignment.center,
+                                      children: [
+                                        Icon(
+                                          Icons.error_outline,
+                                          size: 48,
+                                          color: Colors.red,
+                                        ),
+                                        SizedBox(height: 8),
+                                        Text(
+                                          'Failed to load image',
+                                          style: TextStyle(color: Colors.white),
+                                        ),
+                                      ],
+                                    ),
+                                  );
+                                },
+                              ),
+                    ),
+                  ),
+                  SafeArea(
+                    child: Positioned(
+                      top: 16,
+                      left: 16,
+                      child: IconButton(
+                        icon: const Icon(
+                          Icons.close,
+                          color: Colors.white,
+                          size: 32,
+                        ),
+                        onPressed: () => Navigator.pop(context),
+                        style: IconButton.styleFrom(
+                          backgroundColor: Colors.black54,
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+      ),
+    );
+  }
+
   String _formatAddress(dynamic address) {
     if (address == null) return 'N/A';
     if (address is String) return address;
     if (address is Map) {
-      return address.values.where((v) => v != null && v.toString().isNotEmpty).join(', ');
+      return address.values
+          .where((v) => v != null && v.toString().isNotEmpty)
+          .join(', ');
     }
     return address.toString();
   }
@@ -376,15 +532,16 @@ class _CustomerProfileScreenState extends State<CustomerProfileScreen> {
                           style: ElevatedButton.styleFrom(
                             padding: const EdgeInsets.all(16),
                           ),
-                          child: _isLoading
-                              ? const SizedBox(
-                                  width: 20,
-                                  height: 20,
-                                  child: CircularProgressIndicator(
-                                    strokeWidth: 2,
-                                  ),
-                                )
-                              : const Icon(Icons.search),
+                          child:
+                              _isLoading
+                                  ? const SizedBox(
+                                    width: 20,
+                                    height: 20,
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 2,
+                                    ),
+                                  )
+                                  : const Icon(Icons.search),
                         ),
                       ],
                     ),
@@ -417,7 +574,7 @@ class _CustomerProfileScreenState extends State<CustomerProfileScreen> {
 
             if (_profileData != null) ...[
               const SizedBox(height: 16),
-              
+
               // Profile Information Card
               Card(
                 elevation: 2,
@@ -444,9 +601,11 @@ class _CustomerProfileScreenState extends State<CustomerProfileScreen> {
                                 setState(() {
                                   if (_isEditing) {
                                     // Cancel editing - restore original values
-                                    _linkController.text = _profileData!['link'] ?? '';
-                                    _geographicCoordinatesController.text = 
-                                        _profileData!['geographic_coordinates'] ?? '';
+                                    _linkController.text =
+                                        _profileData!['link'] ?? '';
+                                    _geographicCoordinatesController.text =
+                                        _profileData!['geographic_coordinates'] ??
+                                        '';
                                   }
                                   _isEditing = !_isEditing;
                                 });
@@ -458,11 +617,20 @@ class _CustomerProfileScreenState extends State<CustomerProfileScreen> {
                         const SizedBox(height: 16),
 
                         // Read-only fields
-                        _buildInfoRow('Full Name', _profileData!['full_name'] ?? 'N/A'),
+                        _buildInfoRow(
+                          'Full Name',
+                          _profileData!['full_name'] ?? 'N/A',
+                        ),
                         const SizedBox(height: 12),
-                        _buildInfoRow('Phone Number', _profileData!['phone_number'] ?? 'N/A'),
+                        _buildInfoRow(
+                          'Phone Number',
+                          _profileData!['phone_number'] ?? 'N/A',
+                        ),
                         const SizedBox(height: 12),
-                        _buildInfoRow('Address', _formatAddress(_profileData!['address'])),
+                        _buildInfoRow(
+                          'Address',
+                          _formatAddress(_profileData!['address']),
+                        ),
                         const SizedBox(height: 16),
 
                         const Divider(),
@@ -512,16 +680,20 @@ class _CustomerProfileScreenState extends State<CustomerProfileScreen> {
                             width: double.infinity,
                             child: ElevatedButton.icon(
                               onPressed: _isLoading ? null : _updateProfile,
-                              icon: _isLoading
-                                  ? const SizedBox(
-                                      width: 20,
-                                      height: 20,
-                                      child: CircularProgressIndicator(
-                                        strokeWidth: 2,
-                                        valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
-                                      ),
-                                    )
-                                  : const Icon(Icons.save),
+                              icon:
+                                  _isLoading
+                                      ? const SizedBox(
+                                        width: 20,
+                                        height: 20,
+                                        child: CircularProgressIndicator(
+                                          strokeWidth: 2,
+                                          valueColor:
+                                              AlwaysStoppedAnimation<Color>(
+                                                Colors.white,
+                                              ),
+                                        ),
+                                      )
+                                      : const Icon(Icons.save),
                               label: const Text('Save Changes'),
                               style: ElevatedButton.styleFrom(
                                 padding: const EdgeInsets.all(16),
@@ -547,48 +719,112 @@ class _CustomerProfileScreenState extends State<CustomerProfileScreen> {
                         const SizedBox(height: 16),
 
                         // Display existing gate image or selected image
-                        if (_profileData!['gate_image'] != null || _selectedImage != null) ...[
-                          Container(
-                            height: 250,
-                            width: double.infinity,
-                            decoration: BoxDecoration(
-                              border: Border.all(color: Colors.grey[300]!),
-                              borderRadius: BorderRadius.circular(8),
-                            ),
-                            child: ClipRRect(
-                              borderRadius: BorderRadius.circular(8),
-                              child: _selectedImage != null
-                                  ? Image.file(
-                                      _selectedImage!,
-                                      fit: BoxFit.cover,
-                                    )
-                                  : Image.network(
-                                      _profileData!['gate_image'],
-                                      fit: BoxFit.cover,
-                                      loadingBuilder: (context, child, loadingProgress) {
-                                        if (loadingProgress == null) return child;
-                                        return Center(
-                                          child: CircularProgressIndicator(
-                                            value: loadingProgress.expectedTotalBytes != null
-                                                ? loadingProgress.cumulativeBytesLoaded /
-                                                    loadingProgress.expectedTotalBytes!
-                                                : null,
-                                          ),
-                                        );
-                                      },
-                                      errorBuilder: (context, error, stackTrace) {
-                                        return const Center(
-                                          child: Column(
-                                            mainAxisAlignment: MainAxisAlignment.center,
-                                            children: [
-                                              Icon(Icons.error_outline, size: 48, color: Colors.red),
-                                              SizedBox(height: 8),
-                                              Text('Failed to load image'),
-                                            ],
-                                          ),
-                                        );
-                                      },
+                        if (_profileData!['gate_image'] != null ||
+                            _selectedImage != null) ...[
+                          GestureDetector(
+                            onTap: () {
+                              if (_selectedImage != null) {
+                                _showFullSizeImage(
+                                  context,
+                                  imageFile: _selectedImage,
+                                );
+                              } else if (_profileData!['gate_image'] != null) {
+                                _showFullSizeImage(
+                                  context,
+                                  imageUrl: _profileData!['gate_image'],
+                                );
+                              }
+                            },
+                            child: Container(
+                              height: 250,
+                              width: double.infinity,
+                              decoration: BoxDecoration(
+                                border: Border.all(color: Colors.grey[300]!),
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              child: Stack(
+                                children: [
+                                  ClipRRect(
+                                    borderRadius: BorderRadius.circular(8),
+                                    child:
+                                        _selectedImage != null
+                                            ? Image.file(
+                                              _selectedImage!,
+                                              fit: BoxFit.cover,
+                                              width: double.infinity,
+                                              height: double.infinity,
+                                            )
+                                            : Image.network(
+                                              _profileData!['gate_image'],
+                                              fit: BoxFit.cover,
+                                              width: double.infinity,
+                                              height: double.infinity,
+                                              loadingBuilder: (
+                                                context,
+                                                child,
+                                                loadingProgress,
+                                              ) {
+                                                if (loadingProgress == null)
+                                                  return child;
+                                                return Center(
+                                                  child: CircularProgressIndicator(
+                                                    value:
+                                                        loadingProgress
+                                                                    .expectedTotalBytes !=
+                                                                null
+                                                            ? loadingProgress
+                                                                    .cumulativeBytesLoaded /
+                                                                loadingProgress
+                                                                    .expectedTotalBytes!
+                                                            : null,
+                                                  ),
+                                                );
+                                              },
+                                              errorBuilder: (
+                                                context,
+                                                error,
+                                                stackTrace,
+                                              ) {
+                                                return const Center(
+                                                  child: Column(
+                                                    mainAxisAlignment:
+                                                        MainAxisAlignment
+                                                            .center,
+                                                    children: [
+                                                      Icon(
+                                                        Icons.error_outline,
+                                                        size: 48,
+                                                        color: Colors.red,
+                                                      ),
+                                                      SizedBox(height: 8),
+                                                      Text(
+                                                        'Failed to load image',
+                                                      ),
+                                                    ],
+                                                  ),
+                                                );
+                                              },
+                                            ),
+                                  ),
+                                  // Overlay icon to indicate image is tappable
+                                  Positioned(
+                                    top: 8,
+                                    right: 8,
+                                    child: Container(
+                                      padding: const EdgeInsets.all(8),
+                                      decoration: BoxDecoration(
+                                        color: Colors.black54,
+                                        borderRadius: BorderRadius.circular(20),
+                                      ),
+                                      child: const Icon(
+                                        Icons.zoom_in,
+                                        color: Colors.white,
+                                        size: 24,
+                                      ),
                                     ),
+                                  ),
+                                ],
+                              ),
                             ),
                           ),
                           const SizedBox(height: 16),
@@ -597,18 +833,29 @@ class _CustomerProfileScreenState extends State<CustomerProfileScreen> {
                             height: 200,
                             width: double.infinity,
                             decoration: BoxDecoration(
-                              border: Border.all(color: Colors.grey[300]!, width: 2, style: BorderStyle.solid),
+                              border: Border.all(
+                                color: Colors.grey[300]!,
+                                width: 2,
+                                style: BorderStyle.solid,
+                              ),
                               borderRadius: BorderRadius.circular(8),
                               color: Colors.grey[100],
                             ),
                             child: const Column(
                               mainAxisAlignment: MainAxisAlignment.center,
                               children: [
-                                Icon(Icons.image_outlined, size: 64, color: Colors.grey),
+                                Icon(
+                                  Icons.image_outlined,
+                                  size: 64,
+                                  color: Colors.grey,
+                                ),
                                 SizedBox(height: 8),
                                 Text(
                                   'No gate image uploaded',
-                                  style: TextStyle(color: Colors.grey, fontSize: 16),
+                                  style: TextStyle(
+                                    color: Colors.grey,
+                                    fontSize: 16,
+                                  ),
                                 ),
                               ],
                             ),
@@ -621,9 +868,14 @@ class _CustomerProfileScreenState extends State<CustomerProfileScreen> {
                           children: [
                             Expanded(
                               child: OutlinedButton.icon(
-                                onPressed: _isLoading ? null : _showImageSourceDialog,
+                                onPressed:
+                                    _isLoading ? null : _showImageSourceDialog,
                                 icon: const Icon(Icons.add_photo_alternate),
-                                label: Text(_selectedImage != null ? 'Change Image' : 'Select Image'),
+                                label: Text(
+                                  _selectedImage != null
+                                      ? 'Change Image'
+                                      : 'Select Image',
+                                ),
                                 style: OutlinedButton.styleFrom(
                                   padding: const EdgeInsets.all(12),
                                 ),
@@ -634,16 +886,20 @@ class _CustomerProfileScreenState extends State<CustomerProfileScreen> {
                               Expanded(
                                 child: ElevatedButton.icon(
                                   onPressed: _isLoading ? null : _saveGateImage,
-                                  icon: _isLoading
-                                      ? const SizedBox(
-                                          width: 20,
-                                          height: 20,
-                                          child: CircularProgressIndicator(
-                                            strokeWidth: 2,
-                                            valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
-                                          ),
-                                        )
-                                      : const Icon(Icons.cloud_upload),
+                                  icon:
+                                      _isLoading
+                                          ? const SizedBox(
+                                            width: 20,
+                                            height: 20,
+                                            child: CircularProgressIndicator(
+                                              strokeWidth: 2,
+                                              valueColor:
+                                                  AlwaysStoppedAnimation<Color>(
+                                                    Colors.white,
+                                                  ),
+                                            ),
+                                          )
+                                          : const Icon(Icons.cloud_upload),
                                   label: const Text('Upload'),
                                   style: ElevatedButton.styleFrom(
                                     padding: const EdgeInsets.all(12),
@@ -682,10 +938,7 @@ class _CustomerProfileScreenState extends State<CustomerProfileScreen> {
         const SizedBox(height: 4),
         Text(
           value,
-          style: const TextStyle(
-            fontSize: 16,
-            fontWeight: FontWeight.w500,
-          ),
+          style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w500),
         ),
       ],
     );

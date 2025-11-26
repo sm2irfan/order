@@ -605,12 +605,12 @@ class _OrderManagementScreenState extends State<OrderManagementScreen> {
     if (stockQuantity == null || stockQuantity == 'N/A') {
       return Colors.grey;
     }
-    
+
     final stock = int.tryParse(stockQuantity);
     if (stock == null) {
       return Colors.grey;
     }
-    
+
     if (stock == 0) {
       return Colors.red; // Out of stock
     } else if (stock <= 5) {
@@ -745,10 +745,7 @@ class _OrderManagementScreenState extends State<OrderManagementScreen> {
             width: 120,
             child: SelectableText(
               label,
-              style: const TextStyle(
-                fontWeight: FontWeight.w500,
-                fontSize: 16,
-              ),
+              style: const TextStyle(fontWeight: FontWeight.w500, fontSize: 16),
             ),
           ),
           Expanded(
@@ -772,6 +769,51 @@ class _OrderManagementScreenState extends State<OrderManagementScreen> {
     );
   }
 
+  // Method to build a clickable profile number row
+  Widget _buildProfileNumberRow(String label, int profileNumber) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4.0),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SizedBox(
+            width: 120,
+            child: SelectableText(
+              label,
+              style: const TextStyle(fontWeight: FontWeight.w500, fontSize: 16),
+            ),
+          ),
+          Expanded(
+            child: GestureDetector(
+              onTap: () => _navigateToCustomerProfile(profileNumber),
+              child: Text(
+                profileNumber.toString(),
+                style: const TextStyle(
+                  fontSize: 16,
+                  color: Colors.blue,
+                  decoration: TextDecoration.underline,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // Method to navigate to customer profile screen
+  void _navigateToCustomerProfile(int profileNumber) {
+    print('🔗 Navigating to customer profile for profile #$profileNumber');
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder:
+            (context) =>
+                CustomerProfileScreen(initialProfileNumber: profileNumber),
+      ),
+    );
+  }
+
   // Method to open link in browser
   Future<void> _openLink(String link) async {
     try {
@@ -782,17 +824,17 @@ class _OrderManagementScreenState extends State<OrderManagementScreen> {
       } else {
         print('❌ Could not launch link: $link');
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Could not open link: $link')),
-          );
+          ScaffoldMessenger.of(
+            context,
+          ).showSnackBar(SnackBar(content: Text('Could not open link: $link')));
         }
       }
     } catch (e) {
       print('💥 Error opening link: $e');
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error opening link: $e')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Error opening link: $e')));
       }
     }
   }
@@ -834,11 +876,13 @@ class _OrderManagementScreenState extends State<OrderManagementScreen> {
                   if (order.customerPhoneNumber != null)
                     _buildPhoneRow('Phone:', order.customerPhoneNumber!),
                   if (order.profileNumber != null)
-                    _buildDetailRow('Profile #:', order.profileNumber.toString()),
-                  if (order.link != null)
-                    _buildLinkRow('Link:', order.link!),
+                    _buildProfileNumberRow('Profile #:', order.profileNumber!),
+                  if (order.link != null) _buildLinkRow('Link:', order.link!),
                   if (order.geographicCoordinates != null)
-                    _buildDetailRow('Coordinates:', order.geographicCoordinates!),
+                    _buildDetailRow(
+                      'Coordinates:',
+                      order.geographicCoordinates!,
+                    ),
                   _buildDetailRow('Payment:', order.paymentMethod),
                   _buildDetailRow('Delivery:', order.deliveryOption),
                   if (order.deliveryTimeSlot != null)
@@ -900,7 +944,9 @@ class _OrderManagementScreenState extends State<OrderManagementScreen> {
                                 'Stock: ${item.stockQuantity}',
                                 style: TextStyle(
                                   fontSize: 12,
-                                  color: _getStockStatusColor(item.stockQuantity),
+                                  color: _getStockStatusColor(
+                                    item.stockQuantity,
+                                  ),
                                   fontWeight: FontWeight.w500,
                                 ),
                               ),
@@ -909,7 +955,10 @@ class _OrderManagementScreenState extends State<OrderManagementScreen> {
                                 'Profit: LKR ${item.profit!.toStringAsFixed(2)}',
                                 style: TextStyle(
                                   fontSize: 12,
-                                  color: item.profit! > 0 ? Colors.green : Colors.grey,
+                                  color:
+                                      item.profit! > 0
+                                          ? Colors.green
+                                          : Colors.grey,
                                   fontWeight: FontWeight.w600,
                                 ),
                               ),
@@ -1155,6 +1204,7 @@ class _OrderManagementScreenState extends State<OrderManagementScreen> {
                       calculateDiscount: _calculateTotalDiscount,
                       buildDetailRow: _buildDetailRow,
                       onPhoneNumberTap: _makePhoneCall,
+                      onProfileNumberTap: _navigateToCustomerProfile,
                     )
                     : MobileOrderScreen(
                       filteredOrders: _filteredOrders,

@@ -24,6 +24,7 @@ class DesktopOrderScreen extends StatefulWidget {
   final double Function(Order) calculateDiscount;
   final Widget Function(String, String) buildDetailRow;
   final Function(String)? onPhoneNumberTap;
+  final Function(int)? onProfileNumberTap;
 
   const DesktopOrderScreen({
     super.key,
@@ -42,6 +43,7 @@ class DesktopOrderScreen extends StatefulWidget {
     required this.calculateDiscount,
     required this.buildDetailRow,
     this.onPhoneNumberTap,
+    this.onProfileNumberTap,
   });
 
   @override
@@ -104,10 +106,7 @@ class _DesktopOrderScreenState extends State<DesktopOrderScreen> {
             width: 120,
             child: SelectableText(
               label,
-              style: const TextStyle(
-                fontWeight: FontWeight.w500,
-                fontSize: 16,
-              ),
+              style: const TextStyle(fontWeight: FontWeight.w500, fontSize: 16),
             ),
           ),
           Expanded(
@@ -131,6 +130,43 @@ class _DesktopOrderScreenState extends State<DesktopOrderScreen> {
     );
   }
 
+  // Method to build a clickable profile number row
+  Widget _buildProfileNumberRow(String label, int profileNumber) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4.0),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SizedBox(
+            width: 120,
+            child: SelectableText(
+              label,
+              style: const TextStyle(fontWeight: FontWeight.w500, fontSize: 16),
+            ),
+          ),
+          Expanded(
+            child: GestureDetector(
+              onTap: () {
+                if (widget.onProfileNumberTap != null) {
+                  widget.onProfileNumberTap!(profileNumber);
+                }
+              },
+              child: Text(
+                profileNumber.toString(),
+                style: const TextStyle(
+                  fontSize: 16,
+                  color: Colors.blue,
+                  decoration: TextDecoration.underline,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   // Method to open link in browser
   Future<void> _openLink(String link) async {
     try {
@@ -141,17 +177,17 @@ class _DesktopOrderScreenState extends State<DesktopOrderScreen> {
       } else {
         print('❌ Could not launch link: $link');
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Could not open link: $link')),
-          );
+          ScaffoldMessenger.of(
+            context,
+          ).showSnackBar(SnackBar(content: Text('Could not open link: $link')));
         }
       }
     } catch (e) {
       print('💥 Error opening link: $e');
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error opening link: $e')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Error opening link: $e')));
       }
     }
   }
@@ -190,12 +226,12 @@ class _DesktopOrderScreenState extends State<DesktopOrderScreen> {
     if (stockQuantity == null || stockQuantity == 'N/A') {
       return Colors.grey;
     }
-    
+
     final stock = int.tryParse(stockQuantity);
     if (stock == null) {
       return Colors.grey;
     }
-    
+
     if (stock == 0) {
       return Colors.red; // Out of stock
     } else if (stock <= 5) {
@@ -642,11 +678,13 @@ class _DesktopOrderScreenState extends State<DesktopOrderScreen> {
               if (order.customerPhoneNumber != null)
                 _buildPhoneRow('Phone', order.customerPhoneNumber!),
               if (order.profileNumber != null)
-                widget.buildDetailRow('Profile #', order.profileNumber.toString()),
-              if (order.link != null)
-                _buildLinkRow('Link', order.link!),
+                _buildProfileNumberRow('Profile #', order.profileNumber!),
+              if (order.link != null) _buildLinkRow('Link', order.link!),
               if (order.geographicCoordinates != null)
-                widget.buildDetailRow('Coordinates', order.geographicCoordinates!),
+                widget.buildDetailRow(
+                  'Coordinates',
+                  order.geographicCoordinates!,
+                ),
               if (order.customerName == null &&
                   order.customerPhoneNumber == null &&
                   order.userId != null)
@@ -832,7 +870,9 @@ class _DesktopOrderScreenState extends State<DesktopOrderScreen> {
                                   item.stockQuantity ?? 'N/A',
                                   style: TextStyle(
                                     fontSize: 15,
-                                    color: _getStockStatusColor(item.stockQuantity),
+                                    color: _getStockStatusColor(
+                                      item.stockQuantity,
+                                    ),
                                     fontWeight: FontWeight.w500,
                                   ),
                                 ),
@@ -850,15 +890,16 @@ class _DesktopOrderScreenState extends State<DesktopOrderScreen> {
                               Expanded(
                                 flex: 1,
                                 child: SelectableText(
-                                  item.profit != null 
+                                  item.profit != null
                                       ? '${item.profit!.toStringAsFixed(0)} Rs'
                                       : 'N/A',
                                   style: TextStyle(
                                     fontSize: 15,
                                     fontWeight: FontWeight.w600,
-                                    color: item.profit != null && item.profit! > 0
-                                        ? Colors.green
-                                        : Colors.grey,
+                                    color:
+                                        item.profit != null && item.profit! > 0
+                                            ? Colors.green
+                                            : Colors.grey,
                                   ),
                                 ),
                               ),
@@ -889,7 +930,9 @@ class _DesktopOrderScreenState extends State<DesktopOrderScreen> {
                   const SizedBox(height: 8),
                   Row(
                     children: [
-                      const Spacer(flex: 6), // Updated from 5 to 6 to match new column count (2+1+1+1+1+1=7, total with spacer should balance)
+                      const Spacer(
+                        flex: 6,
+                      ), // Updated from 5 to 6 to match new column count (2+1+1+1+1+1=7, total with spacer should balance)
                       const Expanded(
                         flex: 2,
                         child: SelectableText(
