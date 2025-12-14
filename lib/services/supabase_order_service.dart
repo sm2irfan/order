@@ -47,7 +47,7 @@ class SupabaseOrderService {
 
       print('📜 Using access token: ${accessToken.substring(0, 20)}...');
       print('📡 Making HTTP GET request to: $_baseUrl/get-auth-user-order');
-
+      print('🔗 Request URL: \'$_baseUrl/get-auth-user-order\'');
       final response = await http.get(
         Uri.parse('$_baseUrl/get-auth-user-order'),
         headers: {
@@ -58,6 +58,7 @@ class SupabaseOrderService {
 
       print('📊 Response status code: ${response.statusCode}');
       print('📦 Response body length: ${response.body.length} characters');
+      print('📋 Full response body:\n${response.body}');
 
       if (response.statusCode == 401) {
         print('🔐 Authentication failed - redirecting to login');
@@ -79,13 +80,14 @@ class SupabaseOrderService {
           print('🔎 First order sample: ${ordersJson.first}');
         }
 
-        final List<Order> parsedOrders = ordersJson.map((orderJson) {
-          final order = _parseOrderFromJson(orderJson);
-          print(
-            '✨ Parsed order: ID=${order.id}, Status=${order.orderStatus}, Items=${order.items.length}',
-          );
-          return order;
-        }).toList();
+        final List<Order> parsedOrders =
+            ordersJson.map((orderJson) {
+              final order = _parseOrderFromJson(orderJson);
+              print(
+                '✨ Parsed order: ID=${order.id}, Status=${order.orderStatus}, Items=${order.items.length}',
+              );
+              return order;
+            }).toList();
 
         print('🎉 Successfully parsed ${parsedOrders.length} orders');
         return parsedOrders;
@@ -137,9 +139,12 @@ class SupabaseOrderService {
         link = profile['link'] as String?;
         geographicCoordinates = profile['geographic_coordinates'] as String?;
         profileNumber = profile['profile_number'] as int?;
-        print('👤 Customer: $customerName ($customerPhoneNumber) [Profile #$profileNumber]');
+        print(
+          '👤 Customer: $customerName ($customerPhoneNumber) [Profile #$profileNumber]',
+        );
         if (link != null) print('🔗 Link: $link');
-        if (geographicCoordinates != null) print('📍 Coordinates: $geographicCoordinates');
+        if (geographicCoordinates != null)
+          print('📍 Coordinates: $geographicCoordinates');
       } else {
         print('⚠️  No profile found for order ${json['id']}');
       }
@@ -190,16 +195,16 @@ class SupabaseOrderService {
     try {
       final int productId = json['product_id'] as int;
       // Get product name and image directly from the response
-      final String productName = json['name'] as String? ?? 'Product $productId';
+      final String productName =
+          json['name'] as String? ?? 'Product $productId';
       final String? productImageUrl = json['image'] as String?;
       final int quantity = json['quantity'] as int;
       final String unit = json['unit'] as String;
       final int? discount = json['discount'] as int?;
       final double price = (json['price'] as num).toDouble();
       final String? stockQuantity = json['stock_quantity']?.toString();
-      final double? profit = json['profit'] != null 
-          ? (json['profit'] as num).toDouble() 
-          : null;
+      final double? profit =
+          json['profit'] != null ? (json['profit'] as num).toDouble() : null;
 
       // Calculate unit price for logging
       final unitPrice = price / quantity;

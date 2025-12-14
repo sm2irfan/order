@@ -933,6 +933,14 @@ class _OrderManagementScreenState extends State<OrderManagementScreen> {
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Text(
+                              'Product ID: ${item.productId}',
+                              style: const TextStyle(
+                                fontSize: 12,
+                                color: Colors.grey,
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
+                            Text(
                               '${item.quantity} ${item.unit} @ LKR ${unitPrice.toStringAsFixed(2)} each',
                               style: const TextStyle(
                                 fontSize: 14, // Increased font size

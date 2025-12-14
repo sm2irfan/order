@@ -755,6 +755,16 @@ class _DesktopOrderScreenState extends State<DesktopOrderScreen> {
                   Row(
                     children: const [
                       Expanded(
+                        flex: 1,
+                        child: SelectableText(
+                          'ID',
+                          style: TextStyle(
+                            fontWeight: FontWeight.bold,
+                            fontSize: 16,
+                          ),
+                        ),
+                      ),
+                      Expanded(
                         flex: 2, // Reduced from 3
                         child: SelectableText(
                           'Product',
@@ -825,6 +835,17 @@ class _DesktopOrderScreenState extends State<DesktopOrderScreen> {
                           padding: const EdgeInsets.symmetric(vertical: 8.0),
                           child: Row(
                             children: [
+                              Expanded(
+                                flex: 1,
+                                child: SelectableText(
+                                  '${item.productId}',
+                                  style: const TextStyle(
+                                    fontSize: 15,
+                                    fontWeight: FontWeight.w500,
+                                    color: Colors.grey,
+                                  ),
+                                ),
+                              ),
                               Expanded(
                                 flex: 2, // Reduced from 3
                                 child: GestureDetector(
